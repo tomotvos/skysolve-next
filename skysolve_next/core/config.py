@@ -4,6 +4,7 @@ from pydantic import Field
 class Settings(BaseSettings):
     mode: str = Field(default="solve")  # solve|align|demo
     web_port: int = 5001
+    lx200_port: int = 5002
     solver_primary: str = "tetra3"      # tetra3|astrometry
     solver_fallback: str = "astrometry"
     onstep_enabled: bool = True
