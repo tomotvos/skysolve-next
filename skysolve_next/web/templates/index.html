@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Skysolve Next</title>
+  <link rel="stylesheet" href="/static/styles.css"/>
+</head>
+<body class="day">
+  <header>
+    <h1>Skysolve Next</h1>
+    <div class="modes">
+      <button id="btn-day">Day</button>
+      <button id="btn-night">Night</button>
+    </div>
+  </header>
+  <main>
+    <section>
+      <h2>Status</h2>
+      <pre id="status"></pre>
+    </section>
+  </main>
+  <script>
+    const statusEl = document.getElementById('status');
+    function updateStatus() {
+      fetch('/status').then(r => r.json()).then(j => statusEl.textContent = JSON.stringify(j, null, 2));
+    }
+    updateStatus(); setInterval(updateStatus, 2000);
+    document.getElementById('btn-day').onclick = () => document.body.className='day';
+    document.getElementById('btn-night').onclick = () => document.body.className='night';
+  </script>
+</body>
+</html>

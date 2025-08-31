@@ -1,0 +1,10 @@
+body{font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0;background:#111;color:#eee}
+header{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#222;border-bottom:1px solid #333}
+h1{margin:0;font-size:1.2rem}
+button{margin-left:8px;padding:6px 10px;border:1px solid #555;background:#333;color:#eee;border-radius:6px;cursor:pointer}
+main{padding:16px}
+/* Day vs Night */
+body.day{background:#111;color:#eee}
+body.night{background:#000;color:#e66}
+body.night header{background:#100;border-color:#400}
+body.night button{background:#200;color:#f66;border-color:#600}

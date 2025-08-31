@@ -1,0 +1,38 @@
+Metadata-Version: 2.4
+Name: skysolve-next
+Version: 0.1.0
+Summary: Skysolve Next: Raspberry Pi capture → plate solve → OnStep sync, with FastAPI web UI.
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi>=0.112
+Requires-Dist: uvicorn[standard]>=0.30
+Requires-Dist: pydantic>=2.8
+Requires-Dist: pydantic-settings>=2.3
+Requires-Dist: numpy>=1.26
+Requires-Dist: opencv-python-headless>=4.10
+Requires-Dist: starlette>=0.38
+Requires-Dist: websockets>=12.0
+Requires-Dist: jinja2>=3.1
+Requires-Dist: python-multipart>=0.0.9
+Requires-Dist: psutil>=6.0
+Requires-Dist: gpiozero>=2.0; platform_system == "Linux"
+Requires-Dist: picamera2; platform_system == "Linux"
+Requires-Dist: cedar-solve==0.5.1; platform_system == "Linux"
+
+# Skysolve Next
+
+- **Web UI/API:** port **5001**
+- **OnStep sync-first:** Skysolve plate-solves and **syncs coordinates to OnStep**. SkySafari connects to OnStep directly.
+- **Dual solver support:** Astrometry.net (default) + Tetra3/Cedar (fast option)
+- **Hotspot managed separately** via NetworkManager + GPIO7
+- **mDNS (Avahi):** `_http._tcp` (5001)
+
+## Quick start (dev, no camera)
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -e .[dev]
+uvicorn skysolve_next.web.app:app --host 0.0.0.0 --port 5001 --reload
+```
+
+## Systemd
+See `services/*.service`. Adjust paths if installing under `/opt/skysolve-next`.

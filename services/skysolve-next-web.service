@@ -1,0 +1,16 @@
+[Unit]
+Description=Skysolve Next Web/API (FastAPI)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=skysolve
+WorkingDirectory=/opt/skysolve-next
+EnvironmentFile=/etc/skysolve-next.env
+ExecStart=/opt/skysolve-next/.venv/bin/uvicorn skysolve_next.web.app:app --host 0.0.0.0 --port 5001
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

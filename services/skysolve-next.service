@@ -1,0 +1,16 @@
+[Unit]
+Description=Skysolve Next capture/solve/sync
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=skysolve
+WorkingDirectory=/opt/skysolve-next
+EnvironmentFile=/etc/skysolve-next.env
+ExecStart=/opt/skysolve-next/.venv/bin/python -m skysolve_next.workers.solve_worker
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
