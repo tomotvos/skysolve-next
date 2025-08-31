@@ -1,0 +1,45 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug FastAPI (Uvicorn)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "uvicorn",
+            "args": [
+                "skysolve_next.web.app:app",
+                "--reload",
+                "--port",
+                "5001"
+            ],
+            "jinja": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Run FastAPI (Uvicorn)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "uvicorn",
+            "args": [
+                "skysolve_next.web.app:app",
+                "--port",
+                "5001"
+            ],
+            "jinja": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Run LX200 Command Interpreter",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/skysolve_next/mounts/onstep/lx200.py",
+            "console": "integratedTerminal"
+        }
+    ]
+}
