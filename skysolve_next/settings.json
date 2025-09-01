@@ -1,0 +1,14 @@
+{
+  "camera": {
+    "shutter_speed": "1",
+    "iso_speed": "1000",
+    "image_size": "1280x960"
+  },
+  "solver": {
+    "type": "astrometry"
+  },
+  "onstep": {
+    "host": "localhost",
+    "port": 5002
+  }
+}

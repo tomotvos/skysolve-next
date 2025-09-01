@@ -74,11 +74,20 @@
     [data-theme="night"] .text-gray-300 {
       color: #e66 !important;
     }
+    [data-theme="day"] .text-gray-300 {
+      color: #222 !important;
+    }
     [data-theme="night"] #status-label {
       color: #e66 !important;
     }
     [data-theme="night"] #status-chip {
       color: #e66 !important;
+    }
+    #preview {
+      width: 100%;
+      height: auto;
+      max-width: 100%;
+      display: block;
     }
   </style>
 </head>
@@ -134,6 +143,43 @@
               <span>Confidence:</span> <span id="confidence">--</span>
             </div>
           </div>
+          <div class="bg-white/5 rounded-md p-3 mb-3">
+            <div class="text-xs text-gray-300">Camera Settings</div>
+            <label class="block mt-2">Shutter Speed:
+              <select id="shutter-speed" class="w-full rounded-md p-2 bg-white/5 focus-ring">
+                <option value="2">2 s</option>
+                <option value="1" selected>1 s</option>
+                <option value="1/2">1/2 s</option>
+                <option value="1/4">1/4 s</option>
+                <option value="1/8">1/8 s</option>
+                <option value="1/15">1/15 s</option>
+                <option value="1/30">1/30 s</option>
+                <option value="1/60">1/60 s</option>
+                <option value="1/125">1/125 s</option>
+                <option value="1/250">1/250 s</option>
+                <option value="1/500">1/500 s</option>
+                <option value="1/1000">1/1000 s</option>
+              </select>
+            </label>
+            <label class="block mt-2">ISO Speed:
+              <select id="iso-speed" class="w-full rounded-md p-2 bg-white/5 focus-ring">
+                <option value="2000">2000</option>
+                <option value="1600">1600</option>
+                <option value="1000" selected>1000</option>
+                <option value="800">800</option>
+                <option value="400">400</option>
+                <option value="200">200</option>
+                <option value="100">100</option>
+                <option value="60">60</option>
+              </select>
+            </label>
+            <label class="block mt-2">Image Size:
+              <select id="image-size" class="w-full rounded-md p-2 bg-white/5 focus-ring">
+                <option value="640x480">640x480</option>
+                <option value="1280x960" selected>1280x960</option>
+              </select>
+            </label>
+          </div>
           <div class="bg-white/5 rounded-md p-3">
             <div class="text-xs text-gray-300">Solver</div>
             <div class="mt-1">
@@ -146,11 +192,13 @@
             <label class="block mt-2">Camera Profile:
               <input type="text" id="camera-profile" class="w-full rounded-md p-2 bg-white/5 focus-ring" placeholder="Default"/>
             </label>
-            <label class="block mt-2">OnStep Host:
-              <input type="text" id="onstep-host" class="w-full rounded-md p-2 bg-white/5 focus-ring" value="localhost"/>
+            <label class="block mt-2">OnStep:
+              <input type="hidden" />
             </label>
-            <label class="block mt-2">OnStep Port:
-              <input type="number" id="onstep-port" class="w-full rounded-md p-2 bg-white/5 focus-ring" value="5002" min="1" max="65535"/>
+            <label class="block mt-1 flex items-center">  <span class="mr-1">http://</span>
+              <input type="text" id="onstep-host" class="rounded-md p-2 bg-white/5 focus-ring w-24 mr-1" value="localhost" />
+              <span class="mx-1">:</span>
+              <input type="number" id="onstep-port" class="rounded-md p-2 bg-white/5 focus-ring w-20" value="5002" min="1" max="65535" />
             </label>
             <label class="block mt-2"><input type="checkbox" id="auto-solve"> Auto-solve</label>
             <label class="block mt-2"><input type="checkbox" id="auto-push"> Auto-push to OnStep</label>
@@ -278,6 +326,7 @@ document.addEventListener('DOMContentLoaded', function() {
       .then(() => { debugLog('Auto-push response: success'); setStatusBadge('OK'); })
       .catch((e) => { debugLog('Auto-push error: ' + e); setStatusBadge('Error'); });
   });
+  // Remove JS that sets previewImg.width/height and only rely on CSS for sizing
   // Example: update status badge (simulate status)
   function setStatusBadge(status) {
     const label = document.getElementById('status-label');
@@ -296,6 +345,46 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   // On page load, ensure status badge text is white
   setStatusBadge('OK');
+
+  // Load settings from backend and update UI
+  fetch('/settings').then((r) => r.json()).then(settings => {
+    // Camera settings
+    document.getElementById('shutter-speed').value = settings.camera.shutter_speed;
+    document.getElementById('iso-speed').value = settings.camera.iso_speed;
+    document.getElementById('image-size').value = settings.camera.image_size;
+    // Solver settings
+    document.getElementById('solver-select').value = settings.solver.type;
+    // OnStep settings
+    document.getElementById('onstep-host').value = settings.onstep.host;
+    document.getElementById('onstep-port').value = settings.onstep.port;
+  });
+
+  // Save settings to backend when changed
+  function saveSetting(section, key, value) {
+    fetch('/settings', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({[section]: {[key]: value}})
+    });
+  }
+  document.getElementById('shutter-speed').addEventListener('change', function() {
+    saveSetting('camera', 'shutter_speed', this.value);
+  });
+  document.getElementById('iso-speed').addEventListener('change', function() {
+    saveSetting('camera', 'iso_speed', this.value);
+  });
+  document.getElementById('image-size').addEventListener('change', function() {
+    saveSetting('camera', 'image_size', this.value);
+  });
+  document.getElementById('solver-select').addEventListener('change', function() {
+    saveSetting('solver', 'type', this.value);
+  });
+  document.getElementById('onstep-host').addEventListener('change', function() {
+    saveSetting('onstep', 'host', this.value);
+  });
+  document.getElementById('onstep-port').addEventListener('change', function() {
+    saveSetting('onstep', 'port', this.value);
+  });
 });
 </script>
 </body>
