@@ -95,7 +95,6 @@ def run_solve(image_path, log, hint=None, radius=None):
     start_time = time.time()
     if radius is None:
         radius = SETTINGS["solver"].get("solve_radius", 20.0)
-    # Base command with legacy optimization flags
     cmd = [
         solver.solve_field_path,
         image_path,
@@ -103,32 +102,51 @@ def run_solve(image_path, log, hint=None, radius=None):
         "--no-plots",
         "--new-fits", "none"
     ]
-    # Plotting option
     if SETTINGS["solver"].get("plot", False):
         cmd.remove("--no-plots")
         cmd += ["--plot-bg", image_path]
-    # Custom params from settings.json
     custom_params = SETTINGS["solver"].get("custom_params", [])
     if custom_params:
         cmd += custom_params
-    # If hint is provided, add --ra, --dec, --radius
     if hint and hint.get("ra") is not None and hint.get("dec") is not None:
-        cmd += ["--ra", str(hint["ra"]), "--dec", str(hint["dec"]), "--radius", str(radius)]
-        log(f"[{time.strftime('%H:%M:%S')}] Using hint: RA={hint['ra']}, Dec={hint['dec']}, radius={radius}")
-    log(f"[{time.strftime('%H:%M:%S')}] solve-field command: {' '.join(cmd)}")
+        log(json.dumps({
+            "timestamp": time.strftime('%Y-%m-%dT%H:%M:%S'),
+            "level": "INFO",
+            "msg": "Using hint",
+            "ra": hint["ra"],
+            "dec": hint["dec"],
+            "radius": radius
+        }))
+    log(json.dumps({
+        "timestamp": time.strftime('%Y-%m-%dT%H:%M:%S'),
+        "level": "INFO",
+        "msg": "solve-field command",
+        "cmd": cmd
+    }))
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=solver.timeout)
     for line in proc.stdout.splitlines():
-        log(f"[{time.strftime('%H:%M:%S')}] {line}")
+        log(json.dumps({
+            "timestamp": time.strftime('%Y-%m-%dT%H:%M:%S'),
+            "level": "DEBUG",
+            "msg": line
+        }))
     if proc.stderr:
         for line in proc.stderr.splitlines():
-            log(f"[{time.strftime('%H:%M:%S')}] {line}")
+            log(json.dumps({
+                "timestamp": time.strftime('%Y-%m-%dT%H:%M:%S'),
+                "level": "ERROR" if proc.returncode != 0 else "DEBUG",
+                "msg": line
+            }))
     if proc.returncode != 0:
-        log(f"[{time.strftime('%H:%M:%S')}] Astrometry.net failed: {proc.stderr}")
+        log(json.dumps({
+            "timestamp": time.strftime('%Y-%m-%dT%H:%M:%S'),
+            "level": "ERROR",
+            "msg": "Astrometry.net failed",
+            "stderr": proc.stderr
+        }))
         return None, None, None, None, None, time.time() - start_time
-    # Parse stdout for RA, Dec, Confidence
     ra_deg = dec_deg = confidence = 0.0
     for line in proc.stdout.splitlines():
-        # Remove timestamp prefix if present
         line_no_ts = re.sub(r"^\[\d{2}:\d{2}:\d{2}\]\s*", "", line)
         m1 = re.search(r"RA,Dec\s*=\s*\(([-\d.]+),\s*([-\d.]+)\)", line_no_ts)
         m2 = re.search(r"Field center: \(RA,Dec\) = \(([-\d.]+),\s*([-\d.]+)\)", line_no_ts)
@@ -150,6 +168,16 @@ def run_solve(image_path, log, hint=None, radius=None):
             except Exception:
                 pass
     elapsed = time.time() - start_time
+    # Always log a summary line
+    log(json.dumps({
+        "timestamp": time.strftime('%Y-%m-%dT%H:%M:%S'),
+        "level": "INFO",
+        "msg": "Image solved",
+        "solve_time_s": round(elapsed, 2),
+        "ra": ra_deg,
+        "dec": dec_deg,
+        "confidence": confidence
+    }))
     return ra_deg, dec_deg, confidence, proc.returncode, proc.stderr, elapsed
 
 @app.post("/solve")

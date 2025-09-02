@@ -1,6 +1,6 @@
 # SkySolve Next API Documentation
 
-This document describes the REST API endpoints provided by the SkySolve Next backend. All endpoints are served from the FastAPI app (default port: 5001).
+This document describes the REST and WebSocket API endpoints provided by the SkySolve Next backend. All endpoints are served from the FastAPI app (default port: 5001).
 
 ---
 
@@ -13,7 +13,6 @@ Returns current system status.
 ```
 GET /status
 ```
-
 **Response:**
 ```json
 {
@@ -34,10 +33,9 @@ POST /mode
 Content-Type: application/json
 
 {
-  "mode": "solve"
+  "mode": "solve" | "demo"
 }
 ```
-
 **Response:**
 ```json
 {
@@ -56,7 +54,6 @@ Returns the main web UI HTML page.
 ```
 GET /
 ```
-
 **Response:**
 HTML content of the UI.
 
@@ -69,7 +66,6 @@ Returns the demo image file.
 ```
 GET /static/demo.jpg
 ```
-
 **Response:**
 Binary image data (JPEG).
 
@@ -82,41 +78,58 @@ Solves an uploaded image or loads the demo image if requested.
 ```
 POST /solve?demo=1
 ```
-
 **Response (demo):**
 ```json
 {
   "result": "success",
-  "image_url": "/static/demo.jpg",
-  "message": "Demo image loaded."
+  "image_url": "/solve/image.jpg",
+  "ra": <float>,
+  "dec": <float>,
+  "confidence": <float>,
+  "message": "Image solved. Total solve time: <seconds> seconds.",
+  "log": [<log lines>]
 }
 ```
-
 **Request (upload):**
 ```
 POST /solve
 Content-Type: multipart/form-data
 (image file in 'image' field)
 ```
-
 **Response (upload):**
 ```json
 {
   "result": "success",
-  "message": "Solve endpoint called."
+  "image_url": "/solve/image.jpg",
+  "ra": <float>,
+  "dec": <float>,
+  "confidence": <float>,
+  "message": "Image solved. Total solve time: <seconds> seconds.",
+  "log": [<log lines>]
 }
 ```
 
 ---
 
-### 6. POST `/onstep/push`
+### 6. GET `/solve`
+Returns the last solved image file.
+
+**Request:**
+```
+GET /solve
+```
+**Response:**
+Binary image data (JPEG).
+
+---
+
+### 7. POST `/onstep/push`
 Pushes the last solved coordinates to OnStep (dummy response).
 
 **Request:**
 ```
 POST /onstep/push
 ```
-
 **Response:**
 ```json
 {
@@ -127,7 +140,7 @@ POST /onstep/push
 
 ---
 
-### 7. POST `/auto-solve`
+### 8. POST `/auto-solve`
 Enables or disables auto-solve mode.
 
 **Request:**
@@ -136,21 +149,20 @@ POST /auto-solve
 Content-Type: application/json
 
 {
-  "enabled": true
+  "enabled": true | false
 }
 ```
-
 **Response:**
 ```json
 {
   "result": "success",
-  "auto_solve": true
+  "auto_solve": true | false
 }
 ```
 
 ---
 
-### 8. POST `/auto-push`
+### 9. POST `/auto-push`
 Enables or disables auto-push to OnStep.
 
 **Request:**
@@ -159,28 +171,57 @@ POST /auto-push
 Content-Type: application/json
 
 {
-  "enabled": true
+  "enabled": true | false
 }
 ```
-
 **Response:**
 ```json
 {
   "result": "success",
-  "auto_push": true
+  "auto_push": true | false
 }
 ```
 
 ---
 
-### 9. WebSocket `/events`
+### 10. GET `/settings`
+Returns current settings (JSON).
+
+**Request:**
+```
+GET /settings
+```
+**Response:**
+JSON object with current settings.
+
+---
+
+### 11. POST `/settings`
+Updates settings (partial update by section).
+
+**Request:**
+```
+POST /settings
+Content-Type: application/json
+
+{
+  "camera": { ... },
+  "solver": { ... },
+  "onstep": { ... }
+}
+```
+**Response:**
+JSON object with updated settings.
+
+---
+
+### 12. WebSocket `/events`
 Streams system events (demo only).
 
 **Request:**
 ```
 WebSocket /events
 ```
-
 **Response (on connect):**
 ```json
 {
@@ -196,3 +237,5 @@ WebSocket /events
 - For file uploads, use `multipart/form-data` with the image in the `image` field.
 - For demo mode, use `POST /solve?demo=1`.
 - For questions or contributions, see the main README and implementation plan in `docs/`.
+
+*Updated by GitHub Copilot on 2025-09-02*
