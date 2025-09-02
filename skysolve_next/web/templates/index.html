@@ -150,7 +150,7 @@
               <span>Solver:</span> <span id="solver">--</span>
               <span>Confidence:</span> <span id="confidence">--</span>
             </div>
-            <label class="block mt-2"><input type="checkbox" id="auto-solve"> Auto-solve</label>
+            <label class="block mt-2"><input type="checkbox" id="auto-solve"> Automatically image and solve</label>
           </div>
           <div class="bg-white/5 rounded-md p-3 mb-3">
             <div class="text-xs text-gray-300">Camera Settings</div>
@@ -189,27 +189,26 @@
               </select>
             </label>
           </div>
-          <div class="bg-white/5 rounded-md p-3">
+          <div class="bg-white/5 rounded-md p-3 mb-3">
             <div class="text-xs text-gray-300">Solver</div>
             <div class="mt-1">
               <select id="solver-select" class="w-full rounded-md p-2 bg-white/5 focus-ring">
                 <option value="astrometry">Astrometry.net</option>
-                <option value="tetra">Tetra (if installed)</option>
+                <option value="tetra" disabled>Tetra (if installed)</option>
               </select>
             </div>
             <div class="mt-2 text-xs text-gray-300">Web port: 5001 • LX200 port: 5002</div>
-            <label class="block mt-2">Camera Profile:
-              <input type="text" id="camera-profile" class="w-full rounded-md p-2 bg-white/5 focus-ring" placeholder="Default"/>
-            </label>
-            <label class="block mt-2">OnStep:
-              <input type="hidden" />
-            </label>
-            <label class="block mt-1 flex items-center">  <span class="mr-1">http://</span>
-              <input type="text" id="onstep-host" class="rounded-md p-2 bg-white/5 focus-ring w-24 mr-1" value="localhost" />
-              <span class="mx-1">:</span>
-              <input type="number" id="onstep-port" class="rounded-md p-2 bg-white/5 focus-ring w-20" value="5002" min="1" max="65535" />
-            </label>
-            <label class="block mt-2"><input type="checkbox" id="auto-push"> Auto-push to OnStep</label>
+          </div>
+          <div class="bg-white/5 rounded-md p-3">
+            <div class="text-xs text-gray-300">OnStep</div>
+            <div class="mt-1">
+              <label class="block mt-1 flex items-center">  <span class="mr-1">http://</span>
+                <input type="text" id="onstep-host" class="rounded-md p-2 bg-white/5 focus-ring w-24 mr-1" value="localhost" />
+                <span class="mx-1">:</span>
+                <input type="number" id="onstep-port" class="rounded-md p-2 bg-white/5 focus-ring w-20" value="5002" min="1" max="65535" />
+              </label>
+              <label class="block mt-2"><input type="checkbox" id="auto-push"> Push solutions to OnStep</label>
+            </div>
           </div>
         </aside>
       </div>

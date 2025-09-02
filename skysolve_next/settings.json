@@ -5,7 +5,10 @@
     "image_size": "1280x960"
   },
   "solver": {
-    "type": "astrometry"
+    "type": "astrometry",
+    "hint_timeout": 10,
+    "solve_radius": 20.0,
+    "plot": false
   },
   "onstep": {
     "host": "localhost",
