@@ -5,6 +5,11 @@ from skysolve_next.core.config import settings
 from skysolve_next.core.models import SolveResult
 import os
 import json
+import shutil
+import subprocess
+import re
+import time
+from skysolve_next.solver.astrometry_solver import AstrometrySolver
 
 app = FastAPI(title="Skysolve Next", version="0.1.0")
 app.mount("/static", StaticFiles(directory="skysolve_next/web/static"), name="static")
@@ -65,13 +70,81 @@ async def events(ws: WebSocket):
 def get_demo_image():
     return FileResponse("skysolve_next/web/static/demo.jpg")
 
+WELL_KNOWN_IMAGE_PATH = "skysolve_next/web/static/last_image.jpg"
+DEMO_IMAGE_PATH = "skysolve_next/web/static/demo.jpg"
+SOLVE_IMAGE_PATH = "skysolve_next/web/solve/image.jpg"
+SOLVE_DIR = "skysolve_next/web/solve"
+
+def run_solve(image_path, log):
+    solver = AstrometrySolver()
+    start_time = time.time()
+    cmd = [solver.solve_field_path, image_path, "--overwrite", "--no-plots"]
+    log(f"[{time.strftime('%H:%M:%S')}] solve-field command: {' '.join(cmd)}")
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=solver.timeout)
+    for line in proc.stdout.splitlines():
+        log(f"[{time.strftime('%H:%M:%S')}] {line}")
+    if proc.stderr:
+        for line in proc.stderr.splitlines():
+            log(f"[{time.strftime('%H:%M:%S')}] {line}")
+    if proc.returncode != 0:
+        log(f"[{time.strftime('%H:%M:%S')}] Astrometry.net failed: {proc.stderr}")
+        return None, None, None, None, None, time.time() - start_time
+    # Parse stdout for RA, Dec, Confidence
+    ra_deg = dec_deg = confidence = 0.0
+    for line in proc.stdout.splitlines():
+        # Remove timestamp prefix if present
+        line_no_ts = re.sub(r"^\[\d{2}:\d{2}:\d{2}\]\s*", "", line)
+        m1 = re.search(r"RA,Dec\s*=\s*\(([-\d.]+),\s*([-\d.]+)\)", line_no_ts)
+        m2 = re.search(r"Field center: \(RA,Dec\) = \(([-\d.]+),\s*([-\d.]+)\)", line_no_ts)
+        if m1:
+            try:
+                ra_deg = float(m1.group(1))
+                dec_deg = float(m1.group(2))
+            except Exception:
+                pass
+        elif m2:
+            try:
+                ra_deg = float(m2.group(1))
+                dec_deg = float(m2.group(2))
+            except Exception:
+                pass
+        if "Confidence:" in line_no_ts:
+            try:
+                confidence = float(line_no_ts.split()[1])
+            except Exception:
+                pass
+    elapsed = time.time() - start_time
+    return ra_deg, dec_deg, confidence, proc.returncode, proc.stderr, elapsed
+
 @app.post("/solve")
 def solve(request: Request):
-    # If demo requested, return demo image path
+    log_lines = []
+    def log(msg):
+        log_lines.append(str(msg))
+    # Ensure solve directory exists
+    os.makedirs(SOLVE_DIR, exist_ok=True)
+    # If demo requested, copy demo image to solve path
     if request.query_params.get("demo") == "1":
-        return {"result": "success", "image_url": "/static/demo.jpg", "message": "Demo image loaded."}
-    # Dummy response for upload
-    return {"result": "success", "message": "Solve endpoint called."}
+        shutil.copyfile(DEMO_IMAGE_PATH, SOLVE_IMAGE_PATH)
+    image_path = SOLVE_IMAGE_PATH
+    # Unified solve workflow
+    ra_deg, dec_deg, confidence, returncode, stderr, elapsed = run_solve(image_path, log)
+    if returncode is None or returncode != 0:
+        return {"result": "error", "message": stderr, "log": log_lines}
+    log(f"[{time.strftime('%H:%M:%S')}] Image solved. Total solve time: {elapsed:.2f} seconds.")
+    return {
+        "result": "success",
+        "image_url": f"/solve/image.jpg",
+        "ra": ra_deg,
+        "dec": dec_deg,
+        "confidence": confidence,
+        "message": f"Image solved. Total solve time: {elapsed:.2f} seconds.",
+        "log": log_lines
+    }
+
+@app.get("/solve")
+def get_solve_image():
+    return FileResponse(SOLVE_IMAGE_PATH)
 
 @app.post("/onstep/push")
 def push_onstep():

@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     onstep_host: str = "192.168.0.1"
     onstep_port: int = 9998
     onstep_sync_mode: str = "sync"      # sync|slew_then_sync
+    astrometry_hint_radius: float = Field(default=20.0, description="Default search radius for Astrometry.net hints (degrees)")
 
     class Config:
         env_prefix = "SKYSOLVE_"

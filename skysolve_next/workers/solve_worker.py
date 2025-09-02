@@ -17,6 +17,8 @@ def main():
 
     onstep = OnStepClient() if settings.onstep_enabled else None
 
+    last_ra = None
+    last_dec = None
     while True:
         if settings.mode.lower() == "demo":
             t = time.time()
@@ -27,11 +29,25 @@ def main():
         else:
             frame = np.zeros((256,256), dtype=np.uint8)  # TODO: real Picamera2 capture
             try:
-                res = primary.solve(frame)
+                # Pass hints if available and using AstrometrySolver
+                if isinstance(primary, AstrometrySolver) and last_ra is not None and last_dec is not None:
+                    res = primary.solve(frame, ra_hint=last_ra, dec_hint=last_dec, radius_hint=settings.astrometry_hint_radius)
+                else:
+                    res = primary.solve(frame)
                 if res.confidence < 0.7:
-                    res = fallback.solve(frame)
+                    if isinstance(fallback, AstrometrySolver) and last_ra is not None and last_dec is not None:
+                        res = fallback.solve(frame, ra_hint=last_ra, dec_hint=last_dec, radius_hint=settings.astrometry_hint_radius)
+                    else:
+                        res = fallback.solve(frame)
             except Exception:
-                res = fallback.solve(frame)
+                if isinstance(fallback, AstrometrySolver) and last_ra is not None and last_dec is not None:
+                    res = fallback.solve(frame, ra_hint=last_ra, dec_hint=last_dec, radius_hint=settings.astrometry_hint_radius)
+                else:
+                    res = fallback.solve(frame)
+            # Update last RA/Dec if solve succeeded
+            if res and res.confidence > 0.5:
+                last_ra = res.ra_deg
+                last_dec = res.dec_deg
 
         # Publish to SkySafari (read-only)
         lx200.publish(res)

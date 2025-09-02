@@ -157,35 +157,36 @@ References: OnStep docs — see `docs/references` at repository root.
 > These are *ordered* steps to achieve parity and then OnStep integration. Mark items done as you go.
 
 1. Repo layout and docs
-   - [ ] Add `docs/` folder and move PRD + this Implementation Plan into `docs/` (this file: `docs/SKYSOLVE_NEXT_IMPLEMENTATION_PLAN.md`).
-   - [ ] Create `README.md` sections: ports, quickstart (venv, run), troubleshooting (firewall / PF), required Python version (3.11).
+   - [x] Add `docs/` folder and move PRD + this Implementation Plan into `docs/` (this file: `docs/SKYSOLVE_NEXT_IMPLEMENTATION_PLAN.md`).
+   - [x] Create `README.md` sections: ports, quickstart (venv, run), troubleshooting (firewall / PF), required Python version (3.11).
 2. Stabilize runtime for Pi
-   - [ ] Update packaging to target Python 3.11 (update pyproject/README).
-   - [ ] Create `install_pi.sh` to create venv with `--copies` and install deps.
-   - [ ] Add `systemd` unit template for autostart.
+   - [x] Update packaging to target Python 3.11 (update pyproject/README).
+   - [x] Create `install_pi.sh` to create venv with `--copies` and install deps.  
+   - [~] Add `systemd` unit template for autostart.  # Present in `services/`, but not in `packaging/systemd/` as specified.
 3. Solver adapters
-   - [ ] Implement `solvers/solver_base.py` interface.
-   - [ ] Wrap Astrometry into `solvers/astrometry_adapter.py` (robust CLI wrapper, timeouts).
-   - [ ] Add `solvers/tetra_adapter.py` placeholder and research Tetra build options (binary vs pip wheel).
+   - [x] Implement `solvers/solver_base.py` interface.
+   - [~] Wrap Astrometry into `solvers/astrometry_adapter.py` (robust CLI wrapper, timeouts).  # Only a stub exists; real integration not done.
+   - [~] Add `solvers/tetra_adapter.py` placeholder and research Tetra build options (binary vs pip wheel).  # Placeholder exists, full integration is a stretch goal.
 4. Solve worker & API
-   - [ ] Implement solve worker to accept images (or accept demo image) and route to selected solver.
-   - [ ] Provide REST endpoint `POST /solve` (accept image, returns result).
-   - [ ] Add `GET /status` (show solver availability, last solve).
+   - [x] Implement solve worker to accept images (or accept demo image) and route to selected solver.
+   - [x] Provide REST endpoint `POST /solve` (accept image, returns result).
+   - [x] Add `GET /status` (show solver availability, last solve).
 5. SkySafari / LX200 server
-   - [ ] Review and harden LX200 handler; ensure read-only semantics, robust parsing, and clear logs.
-   - [ ] Add config option for LX200 listen host and port (default `0.0.0.0:5002`).
+   - [x] Review and harden LX200 handler; ensure read-only semantics, robust parsing, and clear logs.
+   - [x] Add config option for LX200 listen host and port (default `0.0.0.0:5002`).
 6. OnStep client
-   - [ ] Implement `onstep/client.py` that accepts solver results and transmits appropriate OnStep commands.
-   - [ ] Add tests with a mock OnStep server in `tests/mocks` to validate commands.
+   - [x] Implement `onstep/client.py` that accepts solver results and transmits appropriate OnStep commands.
+   - [~] Add tests with a mock OnStep server in `tests/mocks` to validate commands.  # Mock server exists, test coverage may need review.
 7. Web UI
-   - [ ] Build minimal UI for dashboard, solve trigger, solver selection, and settings; implement day/night mode CSS and toggle.
-   - [ ] Add a small e2e test to exercise the UI solve flow (optional in CI).
+   - [x] Build minimal UI for dashboard, solve trigger, solver selection, and settings; implement day/night mode CSS and toggle.
+   - [ ] Add a small e2e test to exercise the UI solve flow (optional in CI).  # Not present.
 8. Tests & CI
-   - [ ] Add unit tests + simple integration tests; include CI job matrix that runs lint + unit tests on Python 3.11.
+   - [x] Add unit tests + simple integration tests; include CI job matrix that runs lint + unit tests on Python 3.11.
+   - [~] Lint, formatting, and coverage in CI.  # May lack full pre-commit/coverage integration.
 9. Documentation & operations
-   - [ ] Add firewall troubleshooting doc (macOS PF example, `socketfilterfw` guidance).
-   - [ ] Add developer notes for recreating the venv (`venv --copies`) and common pitfalls (Homebrew Python vs venv).
-   - [ ] Add PR template and contribution guidelines.
+   - [x] Add firewall troubleshooting doc (macOS PF example, `socketfilterfw` guidance).
+   - [x] Add developer notes for recreating the venv (`venv --copies`) and common pitfalls (Homebrew Python vs venv).
+   - [ ] Add PR template and contribution guidelines.  # May be missing or incomplete.
 
 ---
 

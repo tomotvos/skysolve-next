@@ -184,18 +184,8 @@ SKYSOLVE_SYNC_MAX_DEG=5.0             # safety threshold for auto-sync
 
 ---
 
-## 14) Next Steps (implementation checklist excerpt)
-
-- [ ] Ensure LX200 server uses **stream parser** (batched/partial command safe).
-- [ ] Finish **demo mode sweep** and surface last RA/Dec in `/status` + `/events`.
-- [ ] Add **Astrometry.net** adapter (invoke `solve-field`, parse WCS); keep Tetra3/Cedar as optional fast path on Pi.
-- [ ] Wire **OnStep client** behind `SKYSOLVE_ONSTEP_ENABLED` (default false); add delta safety.
-- [ ] Avahi service files for `_http._tcp` (5001) and `_lx200._tcp` (5002).
-- [ ] Docs: short SkySafari setup note + OnStep port guidance.
-
----
-
-## 15) References
+## 14) References
+- Original SkySolve - https://github.com/githubdoe/skysolve
 - Meade LX200 Command Set — https://www.meade.com/support/LX200CommandSet.pdf
 - OnStep wiki: Connections & ports — https://onstep.groups.io/g/main/wiki/3863
 - OnStep Software WiFi Server ports (9996–9999) — https://onstep.groups.io/g/main/wiki/26881
