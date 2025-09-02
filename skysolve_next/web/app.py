@@ -101,9 +101,7 @@ def run_solve(image_path, log, hint=None, radius=None):
         image_path,
         "--overwrite",
         "--no-plots",
-        "--new-fits", "none",
-        "--pnm", "none",
-        "--rdls", "none"
+        "--new-fits", "none"
     ]
     # Plotting option
     if SETTINGS["solver"].get("plot", False):
