@@ -162,12 +162,20 @@ def solve(request: Request):
         "log": log_lines
     }
 
+from fastapi import HTTPException
+
 @app.get("/solve/image.jpg")
 def get_solve_image():
+    import os
+    if not os.path.exists(SOLVE_IMAGE_PATH):
+        raise HTTPException(status_code=404, detail="Solve image not found.")
     return FileResponse(SOLVE_IMAGE_PATH)
 
 @app.get("/solve")
 def get_solve_image_legacy():
+    import os
+    if not os.path.exists(SOLVE_IMAGE_PATH):
+        raise HTTPException(status_code=404, detail="Solve image not found.")
     return FileResponse(SOLVE_IMAGE_PATH)
 
 @app.post("/onstep/push")

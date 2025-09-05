@@ -14,3 +14,4 @@ build/
 .DS_Store
 skysolve_legacy
 skysolve_next/web/solve/
+skysolve_next/web/worker_status.json
