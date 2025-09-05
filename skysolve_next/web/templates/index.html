@@ -104,6 +104,12 @@
     <div class="flex items-center space-x-3">
       <div class="text-xl font-semibold">SkySolve</div>
       <div id="status-chip" class="text-sm px-2 py-1 rounded-md font-semibold" style="background:var(--accent);color:#fff;">Status: <span id="status-label">OK</span></div>
+      <div class="flex items-center space-x-2" id="mode-switch-group">
+        <label class="font-medium">Mode:</label>
+        <label><input type="radio" name="mode" value="solve" checked class="mode-radio"> Solve</label>
+        <label><input type="radio" name="mode" value="align" class="mode-radio"> Align</label>
+        <label><input type="radio" name="mode" value="test" class="mode-radio"> Test</label>
+      </div>
     </div>
     <div class="flex items-center space-x-3">
       <label class="flex items-center cursor-pointer">
@@ -127,9 +133,9 @@
               <img id="preview" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='640' height='360'%3E%3Crect width='100%25' height='100%25' fill='%23222'/%3E%3Ctext x='50%25' y='50%25' fill='%23bbb' font-size='20' text-anchor='middle' alignment-baseline='middle'%3EPreview (Use demo/upload)%3C/text%3E%3C/svg%3E" alt="preview" class="w-full rounded-md" />
             </div>
           </div>
-          <form id="solve-form" enctype="multipart/form-data" class="flex items-center space-x-4">
+          <form id="solve-form" enctype="multipart/form-data" class="flex items-center space-x-4" style="display:none">
             <input id="file-input" type="file" accept="image/*" class="hidden" name="image" />
-            <button id="demo-btn" type="button" class="action-btn">Use Demo</button>
+            <button id="demo-btn" type="button" class="action-btn">Use Sample</button>
             <button id="upload-btn" type="button" class="action-btn">Upload</button>
             <button id="solve-btn" type="submit" class="action-btn">Solve</button>
             <button id="push-onstep" type="button" class="action-btn">OnStep</button>
@@ -144,13 +150,8 @@
             <div class="text-xs text-gray-300">Last Solve</div>
             <div id="last-solve" class="mt-2 text-sm"></div>
             <div class="mt-2 text-xs">
-              <span>RA:</span> <span id="ra">--</span>
-              <span>Dec:</span> <span id="dec">--</span>
               <span>Time:</span> <span id="timestamp">--</span>
-              <span>Solver:</span> <span id="solver">--</span>
-              <span>Confidence:</span> <span id="confidence">--</span>
             </div>
-            <label class="block mt-2"><input type="checkbox" id="auto-solve"> Automatically image and solve</label>
           </div>
           <div class="bg-white/5 rounded-md p-3 mb-3">
             <div class="text-xs text-gray-300">Camera Settings</div>
@@ -250,12 +251,12 @@ document.addEventListener('DOMContentLoaded', function() {
     if (window && window.console) console.log(msg);
   }
   document.getElementById('demo-btn').onclick = function() {
-    debugLog('Demo button clicked: POST /solve?demo=1');
+    debugLog('Test button clicked: POST /solve?test=1');
     setStatusBadge('Busy');
-    fetch('/solve?demo=1', {method:'POST'})
+    fetch('/solve?test=1', {method:'POST'})
       .then(r => r.json())
       .then(j => {
-        debugLog('Demo solve response: ' + JSON.stringify(j));
+        debugLog('Test solve response: ' + JSON.stringify(j));
         setStatusBadge('OK');
         if(j.image_url) {
           const preview = document.getElementById('preview');
@@ -264,22 +265,12 @@ document.addEventListener('DOMContentLoaded', function() {
         if(j.log) {
           const history = document.getElementById('history');
           const li = document.createElement('li');
-          // Render log with line breaks
           li.innerHTML = j.log.map(line => line.replace(/</g, '&lt;').replace(/>/g, '&gt;')).join('<br>');
           history.appendChild(li);
           history.scrollTop = history.scrollHeight;
         }
-        // Update Last Solve panel
-        if(j.result === 'success') {
-          document.getElementById('last-solve').textContent = '';
-          document.getElementById('ra').textContent = j.ra !== undefined ? j.ra : '--';
-          document.getElementById('dec').textContent = j.dec !== undefined ? j.dec : '--';
-          document.getElementById('confidence').textContent = j.confidence !== undefined ? j.confidence : '--';
-          document.getElementById('solver').textContent = 'Astrometry.net';
-          document.getElementById('timestamp').textContent = new Date().toLocaleString();
-        }
       })
-      .catch((e) => { debugLog('Demo solve error: ' + e); setStatusBadge('Error'); });
+      .catch((e) => { debugLog('Test solve error: ' + e); setStatusBadge('Error'); });
   };
   document.getElementById('upload-btn').onclick = function() {
     debugLog('Upload button clicked: opening file picker');
@@ -320,18 +311,14 @@ document.addEventListener('DOMContentLoaded', function() {
         if(j.log) {
           const history = document.getElementById('history');
           const li = document.createElement('li');
-          // Render log with line breaks
           li.innerHTML = j.log.map(line => line.replace(/</g, '&lt;').replace(/>/g, '&gt;')).join('<br>');
           history.appendChild(li);
           history.scrollTop = history.scrollHeight;
         }
         // Update Last Solve panel
         if(j.result === 'success') {
-          document.getElementById('last-solve').textContent = '';
-          document.getElementById('ra').textContent = j.ra !== undefined ? j.ra : '--';
-          document.getElementById('dec').textContent = j.dec !== undefined ? j.dec : '--';
-          document.getElementById('confidence').textContent = j.confidence !== undefined ? j.confidence : '--';
-          document.getElementById('solver').textContent = 'Astrometry.net';
+          const lastSolve = document.getElementById('last-solve');
+          lastSolve.innerHTML = `<div>RA: ${j.ra !== undefined ? j.ra : '--'} Dec: ${j.dec !== undefined ? j.dec : '--'} Confidence: ${(j.confidence !== undefined && j.confidence !== null && j.confidence !== '' && j.confidence !== 0) ? j.confidence : '-'} Solver: Astrometry.net</div>`;
           document.getElementById('timestamp').textContent = new Date().toLocaleString();
         }
       })
@@ -347,19 +334,16 @@ document.addEventListener('DOMContentLoaded', function() {
       })
       .catch((e) => { debugLog('OnStep push error: ' + e); setStatusBadge('Error'); });
   };
-  document.getElementById('auto-solve').addEventListener('change', function() {
-    debugLog('Auto-solve checkbox changed: ' + this.checked);
-    setStatusBadge('Busy');
-    fetch('/auto-solve', {method:'POST', body: JSON.stringify({enabled: this.checked}), headers: {'Content-Type': 'application/json'}})
-      .then(() => { debugLog('Auto-solve response: success'); setStatusBadge('OK'); })
-      .catch((e) => { debugLog('Auto-solve error: ' + e); setStatusBadge('Error'); });
-  });
   document.getElementById('auto-push').addEventListener('change', function() {
     debugLog('Auto-push checkbox changed: ' + this.checked);
     setStatusBadge('Busy');
-    fetch('/auto-push', {method:'POST', body: JSON.stringify({enabled: this.checked}), headers: {'Content-Type': 'application/json'}})
-      .then(() => { debugLog('Auto-push response: success'); setStatusBadge('OK'); })
-      .catch((e) => { debugLog('Auto-push error: ' + e); setStatusBadge('Error'); });
+    fetch('/settings', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({onstep: {enabled: this.checked}})
+    })
+      .then(() => { debugLog('OnStep push setting updated'); setStatusBadge('OK'); })
+      .catch((e) => { debugLog('OnStep push setting error: ' + e); setStatusBadge('Error'); });
   });
   // Remove JS that sets previewImg.width/height and only rely on CSS for sizing
   // Example: update status badge (simulate status)
@@ -376,6 +360,12 @@ document.addEventListener('DOMContentLoaded', function() {
     } else if(status === 'Error') {
       chip.style.background = '#c00';
       chip.style.color = '#fff';
+    } else if(status === 'No Solve Worker') {
+      chip.style.background = '#f6c700'; // yellow warning
+      chip.style.color = '#222';
+    } else if(status === 'Stale') {
+      chip.style.background = '#f6c700';
+      chip.style.color = '#222';
     }
   }
   // On page load, ensure status badge text is white
@@ -392,6 +382,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // OnStep settings
     document.getElementById('onstep-host').value = settings.onstep.host;
     document.getElementById('onstep-port').value = settings.onstep.port;
+    document.getElementById('auto-push').checked = !!settings.onstep.enabled;
   });
 
   // Save settings to backend when changed
@@ -424,6 +415,127 @@ document.addEventListener('DOMContentLoaded', function() {
     const history = document.getElementById('history');
     history.innerHTML = "";
   };
+  // Mode switch radio group wiring
+  const modeRadios = document.querySelectorAll('.mode-radio');
+  function setMode(mode) {
+    fetch('/mode', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({mode})
+    }).then(() => {
+      setStatusBadge('OK');
+      updateActionButtons(mode);
+      localStorage.setItem('skysolve_mode', mode); // Save mode persistently
+    }).catch(() => {
+      setStatusBadge('Error');
+    });
+  }
+  function updateActionButtons(mode) {
+    const form = document.getElementById('solve-form');
+    form.style.display = (mode === 'test') ? '' : 'none';
+  }
+  modeRadios.forEach(radio => {
+    radio.addEventListener('change', function() {
+      if(this.checked) {
+        setStatusBadge('Busy');
+        setMode(this.value);
+      }
+    });
+  });
+  // On page load, fetch mode from backend and persist in localStorage
+  fetch('/status').then(r => r.json()).then(j => {
+    const mode = j.mode || localStorage.getItem('skysolve_mode');
+    if (mode) {
+      modeRadios.forEach(radio => {
+        radio.checked = (radio.value === mode);
+      });
+      updateActionButtons(mode);
+      localStorage.setItem('skysolve_mode', mode);
+    }
+  });
+
+  // Poll worker status and update Last Solve panel
+  let lastStatusTimestamp = null;
+  let lastStatusCheckTime = null;
+  function updateWorkerStatus() {
+    fetch('/worker-status').then(r => r.json()).then(status => {
+      const lastSolve = document.getElementById('last-solve');
+      const timestamp = document.getElementById('timestamp');
+      timestamp.textContent = status.timestamp || '--';
+      lastSolve.innerHTML = '';
+      if (status.error) {
+        if (status.error === 'No worker status available') {
+          setStatusBadge('No Solve Worker');
+        } else {
+          setStatusBadge('Error');
+        }
+        // Only show error in Last Solve if no valid solve data
+        if (!status.ra && !status.dec && !status.confidence) {
+          lastSolve.innerHTML = `<span style='color:#c00'>${status.error}</span>`;
+          lastSolve.style.background = '#f6c700';
+        } else {
+          lastSolve.innerHTML = `<div>RA: ${status.ra ?? '--'} Dec: ${status.dec ?? '--'} Confidence: ${(status.confidence !== undefined && status.confidence !== null && status.confidence !== '' && status.confidence !== 0) ? status.confidence : '-'} Solver: ${status.mode ?? '--'}</div>`;
+          lastSolve.style.background = '';
+        }
+        return;
+      }
+      lastSolve.innerHTML += `<div>RA: ${status.ra ?? '--'} Dec: ${status.dec ?? '--'} Confidence: ${(status.confidence !== undefined && status.confidence !== null && status.confidence !== '' && status.confidence !== 0) ? status.confidence : '-'} Solver: ${status.mode ?? '--'}</div>`;
+      const mode = Array.from(modeRadios).find(r => r.checked)?.value || localStorage.getItem('skysolve_mode');
+      const now = Date.now();
+      if (mode === 'solve') {
+        if (lastStatusTimestamp && lastStatusTimestamp === status.timestamp) {
+          if (!lastStatusCheckTime) lastStatusCheckTime = now;
+          if (now - lastStatusCheckTime > 5000) {
+            // Highlight timestamp only
+            document.getElementById('timestamp').style.background = '#f6c700';
+            lastSolve.style.background = '';
+            setStatusBadge('Stale');
+          } else {
+            document.getElementById('timestamp').style.background = '';
+            lastSolve.style.background = '';
+            setStatusBadge('OK');
+          }
+        } else {
+          document.getElementById('timestamp').style.background = '';
+          lastSolve.style.background = '';
+          setStatusBadge('OK');
+          lastStatusCheckTime = now;
+        }
+        lastStatusTimestamp = status.timestamp;
+      } else {
+        document.getElementById('timestamp').style.background = '';
+        lastSolve.style.background = '';
+        setStatusBadge('OK');
+        lastStatusCheckTime = null;
+      }
+    });
+  }
+  setInterval(updateWorkerStatus, 1500);
+  updateWorkerStatus();
+
+  // Periodically update preview image at shutter speed rate
+  function getShutterInterval() {
+    const shutter = document.getElementById('shutter-speed').value;
+    // Convert shutter speed string to seconds
+    if (shutter.includes('/')) {
+      const parts = shutter.split('/');
+      return 1000 * (parseFloat(parts[0]) / parseFloat(parts[1]));
+    }
+    return 1000 * parseFloat(shutter);
+  }
+  let previewTimer = null;
+  function startPreviewPolling() {
+    if (previewTimer) clearInterval(previewTimer);
+    function updatePreview() {
+      const preview = document.getElementById('preview');
+      // Add cache-busting query param
+      preview.src = '/solve/image.jpg?_=' + Date.now();
+    }
+    updatePreview();
+    previewTimer = setInterval(updatePreview, getShutterInterval());
+  }
+  document.getElementById('shutter-speed').addEventListener('change', startPreviewPolling);
+  startPreviewPolling();
 });
 </script>
 </body>

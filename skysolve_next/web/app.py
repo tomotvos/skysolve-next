@@ -3,6 +3,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from skysolve_next.core.config import settings
 from skysolve_next.core.models import SolveResult
+from pydantic_settings import BaseSettings
 import os
 import json
 import shutil
@@ -11,56 +12,39 @@ import re
 import time
 from threading import Lock
 from skysolve_next.solver.astrometry_solver import AstrometrySolver
+import logging
 
 app = FastAPI(title="Skysolve Next", version="0.1.0")
 app.mount("/static", StaticFiles(directory="skysolve_next/web/static"), name="static")
 
+# Setup consistent logging
+logger = logging.getLogger("skysolve.app")
+if not logger.handlers:
+    h = logging.StreamHandler()
+    h.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+    logger.addHandler(h)
+logger.setLevel(logging.DEBUG)
+
 STATUS = {"mode": "solve", "fps": 0.0, "last_conf": None}
 LAST: SolveResult | None = None
 
-SETTINGS_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "settings.json")
-SETTINGS_LOCK = Lock()
-SETTINGS_LAST_MTIME = None
-SETTINGS = None
-
-DEFAULT_SETTINGS = {
-    "camera": {
-        "shutter_speed": "1",
-        "iso_speed": "1000",
-        "image_size": "1280x960"
-    },
-    "solver": {
-        "type": "astrometry"
-    },
-    "onstep": {
-        "host": "localhost",
-        "port": 5002
-    }
-}
-
-def load_settings():
-    global SETTINGS_LAST_MTIME, SETTINGS
-    mtime = os.path.getmtime(SETTINGS_PATH) if os.path.exists(SETTINGS_PATH) else None
-    if SETTINGS is None or (mtime and SETTINGS_LAST_MTIME != mtime):
-        with SETTINGS_LOCK:
-            with open(SETTINGS_PATH, "r") as f:
-                SETTINGS_LAST_MTIME = mtime
-                SETTINGS = json.load(f)
-    return SETTINGS
-
-def save_settings(settings):
-    with open(SETTINGS_PATH, "w") as f:
-        json.dump(settings, f, indent=2)
-
-SETTINGS = load_settings()
-
 @app.get("/status")
 def status():
-    return {"mode": STATUS["mode"], "fps": STATUS["fps"], "last_conf": STATUS["last_conf"]}
+    settings.reload_if_changed()
+    return {"mode": settings.mode, "fps": STATUS["fps"], "last_conf": STATUS["last_conf"]}
 
 @app.post("/mode")
-def set_mode(mode: str):
+def set_mode(payload: dict = Body(...)):
+    mode = payload.get("mode", "solve")
     STATUS["mode"] = mode
+    settings.mode = mode
+    # Save mode to settings.json
+    import json
+    with open("skysolve_next/settings.json", "r") as f:
+        data = json.load(f)
+    data["mode"] = mode
+    with open("skysolve_next/settings.json", "w") as f:
+        json.dump(data, f, indent=2)
     return STATUS
 
 @app.get("/")
@@ -77,7 +61,7 @@ async def events(ws: WebSocket):
 def get_demo_image():
     return FileResponse("skysolve_next/web/static/demo.jpg")
 
-WELL_KNOWN_IMAGE_PATH = "skysolve_next/web/static/last_image.jpg"
+WELL_KNOWN_IMAGE_PATH = "skysolve_next/web/solve/last_image.jpg"
 DEMO_IMAGE_PATH = "skysolve_next/web/static/demo.jpg"
 SOLVE_IMAGE_PATH = "skysolve_next/web/solve/image.jpg"
 SOLVE_DIR = "skysolve_next/web/solve"
@@ -89,127 +73,85 @@ LAST_SOLVE = {
 }
 DEFAULT_SOLVE_RADIUS = 20.0  # degrees
 
-def run_solve(image_path, log, hint=None, radius=None):
-    SETTINGS = load_settings()
-    solver = AstrometrySolver()
-    start_time = time.time()
-    if radius is None:
-        radius = SETTINGS["solver"].get("solve_radius", 20.0)
-    cmd = [
-        solver.solve_field_path,
-        image_path,
-        "--overwrite",
-        "--no-plots",
-        "--new-fits", "none"
-    ]
-    if SETTINGS["solver"].get("plot", False):
-        cmd.remove("--no-plots")
-        cmd += ["--plot-bg", image_path]
-    custom_params = SETTINGS["solver"].get("custom_params", [])
-    if custom_params:
-        cmd += custom_params
-    if hint and hint.get("ra") is not None and hint.get("dec") is not None:
-        log(json.dumps({
+
+def write_status(mode, ra, dec, confidence, error=None):
+    import time, json, os
+    status_path = "skysolve_next/web/worker_status.json"
+    # Load previous status if exists
+    if os.path.exists(status_path):
+        with open(status_path, "r") as f:
+            prev = json.load(f)
+    else:
+        prev = {}
+    # Only update timestamp and RA/Dec if mode is 'solve' and RA/Dec are not None
+    if mode == "solve" and ra is not None and dec is not None:
+        status = {
             "timestamp": time.strftime('%Y-%m-%dT%H:%M:%S'),
-            "level": "INFO",
-            "msg": "Using hint",
-            "ra": hint["ra"],
-            "dec": hint["dec"],
-            "radius": radius
-        }))
-    log(json.dumps({
-        "timestamp": time.strftime('%Y-%m-%dT%H:%M:%S'),
-        "level": "INFO",
-        "msg": "solve-field command",
-        "cmd": cmd
-    }))
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=solver.timeout)
-    for line in proc.stdout.splitlines():
-        log(json.dumps({
-            "timestamp": time.strftime('%Y-%m-%dT%H:%M:%S'),
-            "level": "DEBUG",
-            "msg": line
-        }))
-    if proc.stderr:
-        for line in proc.stderr.splitlines():
-            log(json.dumps({
-                "timestamp": time.strftime('%Y-%m-%dT%H:%M:%S'),
-                "level": "ERROR" if proc.returncode != 0 else "DEBUG",
-                "msg": line
-            }))
-    if proc.returncode != 0:
-        log(json.dumps({
-            "timestamp": time.strftime('%Y-%m-%dT%H:%M:%S'),
-            "level": "ERROR",
-            "msg": "Astrometry.net failed",
-            "stderr": proc.stderr
-        }))
-        return None, None, None, None, None, time.time() - start_time
-    ra_deg = dec_deg = confidence = 0.0
-    for line in proc.stdout.splitlines():
-        line_no_ts = re.sub(r"^\[\d{2}:\d{2}:\d{2}\]\s*", "", line)
-        m1 = re.search(r"RA,Dec\s*=\s*\(([-\d.]+),\s*([-\d.]+)\)", line_no_ts)
-        m2 = re.search(r"Field center: \(RA,Dec\) = \(([-\d.]+),\s*([-\d.]+)\)", line_no_ts)
-        if m1:
-            try:
-                ra_deg = float(m1.group(1))
-                dec_deg = float(m1.group(2))
-            except Exception:
-                pass
-        elif m2:
-            try:
-                ra_deg = float(m2.group(1))
-                dec_deg = float(m2.group(2))
-            except Exception:
-                pass
-        if "Confidence:" in line_no_ts:
-            try:
-                confidence = float(line_no_ts.split()[1])
-            except Exception:
-                pass
-    elapsed = time.time() - start_time
-    # Always log a summary line
-    log(json.dumps({
-        "timestamp": time.strftime('%Y-%m-%dT%H:%M:%S'),
-        "level": "INFO",
-        "msg": "Image solved",
-        "solve_time_s": round(elapsed, 2),
-        "ra": ra_deg,
-        "dec": dec_deg,
-        "confidence": confidence
-    }))
-    return ra_deg, dec_deg, confidence, proc.returncode, proc.stderr, elapsed
+            "mode": mode,
+            "ra": ra,
+            "dec": dec,
+            "confidence": confidence,
+            "error": error
+        }
+    else:
+        # Keep previous values for timestamp, ra, dec, confidence
+        status = {
+            "timestamp": prev.get("timestamp"),
+            "mode": mode,
+            "ra": prev.get("ra"),
+            "dec": prev.get("dec"),
+            "confidence": prev.get("confidence"),
+            "error": error
+        }
+    with open(status_path, "w") as f:
+        json.dump(status, f)
 
 @app.post("/solve")
 def solve(request: Request):
     global LAST_SOLVE
-    SETTINGS = load_settings()
+    settings.reload_if_changed()
     log_lines = []
     def log(msg):
         log_lines.append(str(msg))
     # Ensure solve directory exists
     os.makedirs(SOLVE_DIR, exist_ok=True)
     # If demo requested, copy demo image to solve path
-    if request.query_params.get("demo") == "1":
+    if request.query_params.get("demo") == "1" or request.query_params.get("test") == "1":
         shutil.copyfile(DEMO_IMAGE_PATH, SOLVE_IMAGE_PATH)
     image_path = SOLVE_IMAGE_PATH
     # Determine if we should use a hint
     now = time.time()
     hint = None
-    hint_timeout = SETTINGS["solver"].get("hint_timeout", 10)
-    solve_radius = SETTINGS["solver"].get("solve_radius", 20.0)
+    hint_timeout = getattr(settings.solver, "hint_timeout", 10)
+    solve_radius = getattr(settings.solver, "solve_radius", 20.0)
     if LAST_SOLVE["ra"] is not None and LAST_SOLVE["dec"] is not None and LAST_SOLVE["timestamp"] is not None:
         if now - LAST_SOLVE["timestamp"] <= hint_timeout:
             hint = {"ra": LAST_SOLVE["ra"], "dec": LAST_SOLVE["dec"]}
     # Unified solve workflow
-    ra_deg, dec_deg, confidence, returncode, stderr, elapsed = run_solve(image_path, log, hint=hint, radius=solve_radius)
+    solver = AstrometrySolver()
+    start_time = time.time()
+    try:
+        result = solver.solve(image_path, ra_hint=hint["ra"] if hint else None, dec_hint=hint["dec"] if hint else None, radius_hint=solve_radius, log=log)
+        ra_deg = result.ra_deg
+        dec_deg = result.dec_deg
+        confidence = result.confidence
+        returncode = 0
+        stderr = None
+    except Exception as e:
+        ra_deg = dec_deg = confidence = None
+        returncode = 1
+        stderr = str(e)
+    elapsed = time.time() - start_time
+    mode = STATUS.get("mode", "solve")
+    error = stderr if returncode is None or returncode != 0 else None
+    write_status(mode, ra_deg, dec_deg, confidence, error)
     if returncode is None or returncode != 0:
         return {"result": "error", "message": stderr, "log": log_lines}
     # Save last solve info
     LAST_SOLVE["ra"] = ra_deg
     LAST_SOLVE["dec"] = dec_deg
     LAST_SOLVE["timestamp"] = now
-    log(f"[{time.strftime('%H:%M:%S')}] Image solved. Total solve time: {elapsed:.2f} seconds.")
+    logger.info(f"[{time.strftime('%H:%M:%S')}] Image solved. Total solve time: {elapsed:.2f} seconds.")
     return {
         "result": "success",
         "image_url": f"/solve/image.jpg",
@@ -220,8 +162,12 @@ def solve(request: Request):
         "log": log_lines
     }
 
-@app.get("/solve")
+@app.get("/solve/image.jpg")
 def get_solve_image():
+    return FileResponse(SOLVE_IMAGE_PATH)
+
+@app.get("/solve")
+def get_solve_image_legacy():
     return FileResponse(SOLVE_IMAGE_PATH)
 
 @app.post("/onstep/push")
@@ -243,16 +189,63 @@ def auto_push(payload: dict):
 
 @app.get("/settings")
 def get_settings():
-    return SETTINGS
+    settings.reload_if_changed()
+    # Return as dict for API compatibility
+    return settings.model_dump()
 
 @app.post("/settings")
 def update_settings(new_settings: dict = Body(...)):
-    global SETTINGS
     # Merge each section instead of overwriting
+    settings.reload_if_changed()
     for section, values in new_settings.items():
-        if section in SETTINGS and isinstance(values, dict):
-            SETTINGS[section].update(values)
-        else:
-            SETTINGS[section] = values
-    save_settings(SETTINGS)
-    return SETTINGS
+        if hasattr(settings, section):
+            current = getattr(settings, section)
+            # If it's a nested Pydantic model and values is a dict, merge fields
+            if isinstance(current, BaseSettings) and isinstance(values, dict):
+                for k, v in values.items():
+                    # Special case for onstep.enabled: always cast to bool
+                    if section == "onstep" and k == "enabled":
+                        setattr(current, k, bool(v) if not isinstance(v, bool) else v)
+                    elif hasattr(current, k):
+                        setattr(current, k, v)
+            else:
+                setattr(settings, section, values)
+    # Special case: ensure onstep.enabled is always merged, even if only 'enabled' is present
+    if 'onstep' in new_settings and isinstance(new_settings['onstep'], dict):
+        if 'enabled' in new_settings['onstep']:
+            settings.onstep.enabled = bool(new_settings['onstep']['enabled'])
+    # Save to settings.json
+    import json
+    # Only dump nested structure, not flattened keys
+    def settings_dump():
+        return {
+            "mode": settings.mode,
+            "web_port": settings.web_port,
+            "lx200_port": settings.lx200_port,
+            "solver": settings.solver.model_dump(),
+            "camera": settings.camera.model_dump(),
+            "onstep": settings.onstep.model_dump()
+        }
+    with open("skysolve_next/settings.json", "w") as f:
+        json.dump(settings_dump(), f, indent=2)
+    return settings_dump()
+
+@app.get("/worker-status")
+def worker_status():
+    status_path = "skysolve_next/web/worker_status.json"
+    if not os.path.exists(status_path):
+        return {"error": "No worker status available"}
+    with open(status_path, "r") as f:
+        status = json.load(f)
+    # If worker is not running, set error even if file exists but is stale
+    import psutil
+    worker_running = any(
+        any(
+            'solve_worker.py' in arg or 'skysolve_next/workers/solve_worker.py' in arg
+            for arg in (p.info.get('cmdline') or [])
+        )
+        for p in psutil.process_iter(['cmdline'])
+    )
+    if not worker_running:
+        status['error'] = 'No worker status available'
+    return status

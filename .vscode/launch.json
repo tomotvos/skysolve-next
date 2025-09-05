@@ -40,6 +40,13 @@
             "request": "launch",
             "program": "${workspaceFolder}/skysolve_next/mounts/onstep/lx200.py",
             "console": "integratedTerminal"
+        },
+        {
+            "name": "Debug Solve Worker",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/skysolve_next/workers/solve_worker.py",
+            "console": "integratedTerminal"
         }
     ]
 }

@@ -7,4 +7,4 @@ class Tetra3Solver(Solver):
         pass
 
     def solve(self, image: np.ndarray) -> SolveResult:
-        return SolveResult(ra_deg=180.0, dec_deg=45.0, roll_deg=0.0, plate_scale_arcsec_px=12.3, confidence=0.95)
+        return SolveResult(ra_deg=180.0, dec_deg=45.0, roll_deg=0.0, plate_scale_arcsec_px=12.3, confidence=0.95 if 0.95 not in (None, 0.0) else "-")

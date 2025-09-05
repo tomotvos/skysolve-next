@@ -1,17 +1,21 @@
 {
-  "camera": {
-    "shutter_speed": "1",
-    "iso_speed": "1000",
-    "image_size": "1280x960"
-  },
+  "mode": "test",
+  "web_port": 5001,
+  "lx200_port": 5002,
   "solver": {
     "type": "astrometry",
     "hint_timeout": 10,
     "solve_radius": 20.0,
     "plot": false
   },
+  "camera": {
+    "shutter_speed": "1",
+    "iso_speed": "1000",
+    "image_size": "1280x960"
+  },
   "onstep": {
     "host": "localhost",
-    "port": 9998
+    "port": 9998,
+    "enabled": false
   }
 }

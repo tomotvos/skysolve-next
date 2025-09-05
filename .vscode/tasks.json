@@ -1,6 +1,18 @@
 {
     "version": "2.0.0",
     "tasks": [
-        // ...existing tasks (if any)...
+        {
+            "label": "Run Solve Worker",
+            "type": "shell",
+            "command": "${workspaceFolder}/.venv/bin/python",
+            "args": [
+                "skysolve_next/workers/solve_worker.py"
+            ],
+            "group": "build",
+            "presentation": {
+                "reveal": "always"
+            },
+            "problemMatcher": []
+        }
     ]
 }

@@ -175,7 +175,11 @@ class LX200Server:
     def publish(self, result: SolveResult) -> None:
         with self._lock:
             self._last = result
-            _record_debug(f"PUB RA={result.ra_deg:.6f} DEC={result.dec_deg:.6f} CONF={getattr(result,'confidence',None)}")
+            conf_val = getattr(result,'confidence',None)
+            conf_str = conf_val if conf_val not in (None, 0.0) else "-"
+            ra_str = f"{result.ra_deg:.6f}" if getattr(result, 'ra_deg', None) is not None else "-"
+            dec_str = f"{result.dec_deg:.6f}" if getattr(result, 'dec_deg', None) is not None else "-"
+            _record_debug(f"PUB RA={ra_str} DEC={dec_str} CONF={conf_str}")
 
     @staticmethod
     def _format_ra(ra_deg: float) -> str:

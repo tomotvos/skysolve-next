@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Union
 
 @dataclass
 class SolveResult:
@@ -6,4 +7,4 @@ class SolveResult:
     dec_deg: float
     roll_deg: float
     plate_scale_arcsec_px: float
-    confidence: float
+    confidence: Union[float, str]

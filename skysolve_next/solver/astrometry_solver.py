@@ -12,58 +12,76 @@ class AstrometrySolver(Solver):
         self.max_retries = max_retries
         self.logger = logging.getLogger("AstrometrySolver")
 
-    def solve(self, image_path: str, ra_hint: float = None, dec_hint: float = None, radius_hint: float = None) -> SolveResult:
+    def solve(self, image_path: str, ra_hint: float = None, dec_hint: float = None, radius_hint: float = None, log=None) -> SolveResult:
+        import re, time, json
+        def _log(msg, level="INFO"):
+            if log:
+                log_msg = json.dumps({
+                    "timestamp": time.strftime('%Y-%m-%dT%H:%M:%S'),
+                    "level": level,
+                    "msg": msg
+                })
+                log(log_msg)
+            getattr(self.logger, level.lower(), self.logger.info)(msg)
+
         if not (isinstance(image_path, str) and os.path.isfile(image_path)):
-            self.logger.error(f"Invalid image path: {image_path}")
+            _log(f"Invalid image path: {image_path}", level="ERROR")
             raise ValueError("AstrometrySolver expects a valid image file path.")
-        last_exception = None
-        for attempt in range(1, self.max_retries + 1):
-            try:
-                cmd = [self.solve_field_path, image_path, "--overwrite", "--no-plots"]
-                # Add hint parameters if provided
-                if ra_hint is not None and dec_hint is not None and radius_hint is not None:
-                    cmd += ["--ra", str(ra_hint), "--dec", str(dec_hint), "--radius", str(radius_hint)]
-                    self.logger.info(f"Using hint: RA={ra_hint}, Dec={dec_hint}, Radius={radius_hint}")
-                self.logger.info(f"solve-field command: {' '.join(cmd)}")
-                proc = subprocess.run(cmd, capture_output=True, text=True, timeout=self.timeout)
-                if proc.returncode != 0:
-                    self.logger.warning(f"Astrometry.net failed (attempt {attempt}): {proc.stderr}")
-                    raise RuntimeError(f"Astrometry.net failed: {proc.stderr}")
-                # Parse stdout for solution summary
-                ra_deg = dec_deg = roll_deg = plate_scale_arcsec_px = confidence = 0.0
-                for line in proc.stdout.splitlines():
-                    if "RA,Dec =" in line:
-                        try:
-                            parts = line.split()
-                            ra_deg = float(parts[2].replace(',', ''))
-                            dec_deg = float(parts[3].replace(',', ''))
-                        except Exception:
-                            pass
-                    if "Field rotation:" in line:
-                        try:
-                            roll_deg = float(line.split()[2])
-                        except Exception:
-                            pass
-                    if "Pixel scale:" in line:
-                        try:
-                            plate_scale_arcsec_px = float(line.split()[2])
-                        except Exception:
-                            pass
-                    if "Confidence:" in line:
-                        try:
-                            confidence = float(line.split()[1])
-                        except Exception:
-                            pass
-                self.logger.info(f"Astrometry.net solve succeeded on attempt {attempt}")
-                return SolveResult(
-                    ra_deg=ra_deg,
-                    dec_deg=dec_deg,
-                    roll_deg=roll_deg,
-                    plate_scale_arcsec_px=plate_scale_arcsec_px,
-                    confidence=confidence
-                )
-            except Exception as e:
-                self.logger.error(f"Astrometry.net solve error (attempt {attempt}): {e}")
-                last_exception = e
-        self.logger.critical(f"Astrometry.net failed after {self.max_retries} attempts: {last_exception}")
-        raise RuntimeError(f"Astrometry.net failed after {self.max_retries} attempts: {last_exception}")
+        start_time = time.time()
+        if radius_hint is None:
+            radius_hint = 20.0
+        cmd = [
+            self.solve_field_path,
+            image_path,
+            "--overwrite",
+            "--no-plots",
+            "--new-fits", "none"
+        ]
+        if ra_hint is not None and dec_hint is not None:
+            cmd += ["--ra", str(ra_hint), "--dec", str(dec_hint), "--radius", str(radius_hint)]
+            _log(f"Using hint: RA={ra_hint}, Dec={dec_hint}, Radius={radius_hint}")
+        _log(f"solve-field command: {' '.join(cmd)}")
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=self.timeout)
+        for line in proc.stdout.splitlines():
+            _log(line, level="DEBUG")
+        if proc.stderr:
+            for line in proc.stderr.splitlines():
+                _log(line, level="ERROR")
+        if proc.returncode != 0:
+            _log(f"Astrometry.net failed: {proc.stderr}", level="ERROR")
+            raise RuntimeError(f"Astrometry.net failed: {proc.stderr}")
+        ra_deg = dec_deg = confidence = 0.0
+        for line in proc.stdout.splitlines():
+            line_no_ts = re.sub(r"^\[\d{2}:\d{2}:\d{2}\]\s*", "", line)
+            m1 = re.search(r"RA,Dec\s*=\s*\(([-\d.]+),\s*([-\d.]+)\)", line_no_ts)
+            m2 = re.search(r"Field center: \(RA,Dec\) = \(([-\d.]+),\s*([-\d.]+)\)", line_no_ts)
+            if m1:
+                try:
+                    ra_deg = float(m1.group(1))
+                    dec_deg = float(m1.group(2))
+                except Exception:
+                    pass
+            elif m2:
+                try:
+                    ra_deg = float(m2.group(1))
+                    dec_deg = float(m2.group(2))
+                except Exception:
+                    pass
+            if "Confidence:" in line_no_ts:
+                try:
+                    confidence = float(line_no_ts.split()[1])
+                except Exception:
+                    pass
+        elapsed = time.time() - start_time
+        _log(f"Astrometry.net solve succeeded in {elapsed:.2f}s: RA={ra_deg}, DEC={dec_deg}, CONF={confidence}")
+        # Add summary log for compatibility with app expectations, including solve time
+        _log(
+            f"Image solved. Solve time: {elapsed:.2f} seconds.", level="INFO"
+        )
+        return SolveResult(
+            ra_deg=ra_deg,
+            dec_deg=dec_deg,
+            roll_deg=None,
+            plate_scale_arcsec_px=None,
+            confidence=confidence if confidence not in (None, 0.0) else "-"
+        )
