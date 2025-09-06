@@ -220,6 +220,7 @@ def main():
             elif mode == "align":
                 logger.info("Align mode: capturing preview frame.")
                 frame = camera.capture()
+                logger.info("[DIAG] Finished camera.capture() in align mode")
                 res = SolveResult(ra_deg=None, dec_deg=None, roll_deg=None, plate_scale_arcsec_px=None, confidence=None)
             else:
                 logger.info("Solve mode: capturing frame and running solver.")
@@ -265,6 +266,7 @@ def main():
                     logger.error(f"OnStep sync error: {e}")
             logger.info("[DIAG] End of main loop")
             time.sleep(0.1)
+            logger.info("[DIAG] Slept 0.1s, about to next loop")
         except Exception as loop_exc:
             logger.error(f"[UNHANDLED EXCEPTION in main loop]: {loop_exc}", exc_info=True)
             time.sleep(1.0)
