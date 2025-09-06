@@ -19,8 +19,21 @@ if [ ${#missing_pkgs[@]} -ne 0 ]; then
 	fi
 fi
 
-# Create a Python virtual environment in the project directory
-python3 -m venv .venv
+
+# Ensure system package for libcamera Python bindings is installed
+if ! dpkg -s python3-libcamera >/dev/null 2>&1; then
+	if [ "$EUID" -ne 0 ]; then
+		echo "python3-libcamera is required. Please run the following command as root or with sudo, then re-run this script:"
+		echo "  sudo apt-get update && sudo apt-get install -y python3-libcamera"
+		exit 1
+	else
+		apt-get update && apt-get install -y python3-libcamera
+	fi
+fi
+
+# Create a Python virtual environment in the project directory with system site packages
+python3 -m venv .venv --system-site-packages
+
 
 # Activate the virtual environment
 source .venv/bin/activate
