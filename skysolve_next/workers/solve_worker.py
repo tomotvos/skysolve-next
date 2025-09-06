@@ -49,45 +49,37 @@ class CameraCapture:
         self.logger.setLevel(logging.DEBUG)
         if self.is_pi:
             try:
+                from picamera2 import Picamera2
                 self.picam = Picamera2()
-                self.configure_camera()
-                self.logger.info("Picamera2 initialized successfully.")
+                cam_settings = self.settings.camera
+                size = tuple(map(int, cam_settings.image_size.split("x")))
+                config = self.picam.create_still_configuration(main={"size": size, "format": "RGB888"})
+                self.picam.configure(config)
+                self.picam.set_controls({
+                    "ExposureTime": int(float(cam_settings.shutter_speed) * 1e6),
+                    "AnalogueGain": float(cam_settings.iso_speed) / 100.0,
+                    "AeEnable": False
+                })
+                try:
+                    self.picam.exposure_mode = 'off'
+                except Exception as e:
+                    self.logger.warning(f"exposure_mode could not be set: {e}")
+                self.picam.start()
+                self.logger.info("Picamera2 initialized and started successfully.")
             except Exception as e:
                 self.last_error = f"Picamera2 init failed: {e}"
                 self.is_pi = False
                 self.logger.error(f"[DIAG] {self.last_error}")
 
     def configure_camera(self):
-        cam_settings = self.settings.camera
-        size = tuple(map(int, cam_settings.image_size.split("x")))
-        controls = {
-            "ExposureTime": int(float(cam_settings.shutter_speed) * 1e6),
-            "AnalogueGain": float(cam_settings.iso_speed) / 100.0,
-            "AeEnable": False
-        }
-        self.logger.debug(f"Configuring camera (legacy style): size={size}, controls={controls}")
-        config = self.picam.create_still_configuration(main={"size": size, "format": "RGB888"})
-        self.picam.configure(config)
-        # Set controls and disable auto-exposure
-        self.picam.set_controls(controls)
-        try:
-            self.picam.exposure_mode = 'off'
-        except Exception as e:
-            self.logger.warning(f"exposure_mode could not be set: {e}")
-        # Debug output for camera controls
-        self.logger.info(f"Camera controls: {self.picam.camera_controls}")
-        self.logger.info(f"Camera config: {self.picam.camera_config}")
+        # No longer used; configuration is done once in __init__
+        pass
 
     def capture(self):
         self.logger.debug("Starting image capture...")
         if self.is_pi and self.picam:
             try:
-                self.configure_camera()  # Hot-reload settings
-                # Print capture metadata before capture
-                self.logger.info(f"Pre-capture metadata: {self.picam.capture_metadata()}")
                 frame = self.picam.capture_array()
-                # Print capture metadata after capture
-                self.logger.info(f"Post-capture metadata: {self.picam.capture_metadata()}")
                 self.save_preview(frame)
                 self.latest_frame = frame
                 self.last_error = None
