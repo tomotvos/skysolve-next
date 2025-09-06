@@ -79,11 +79,29 @@ class CameraCapture:
         self.logger.debug("Starting image capture...")
         if self.is_pi and self.picam:
             try:
+                # Reload camera settings before each capture
+                self.settings.reload_if_changed()
+                cam_settings = self.settings.camera
+                # Update controls if changed
+                controls = {
+                    "ExposureTime": int(float(cam_settings.shutter_speed) * 1e6),
+                    "AnalogueGain": float(cam_settings.iso_speed) / 100.0,
+                    "AeEnable": False
+                }
+                self.picam.set_controls(controls)
+                self.logger.debug(f"Set camera controls: {controls}")
                 frame = self.picam.capture_array()
                 self.save_preview(frame)
                 self.latest_frame = frame
                 self.last_error = None
                 self.logger.info("Image captured successfully.")
+                # Sleep for shutter speed to simulate exposure time
+                try:
+                    shutter = float(getattr(cam_settings, "shutter_speed", 1))
+                    self.logger.debug(f"Sleeping for shutter speed: {shutter}s")
+                    time.sleep(max(0.01, shutter))
+                except Exception as sleep_e:
+                    self.logger.warning(f"Could not sleep for shutter: {sleep_e}")
                 return frame
             except Exception as e:
                 self.last_error = f"Camera capture failed: {e}"
