@@ -18,11 +18,17 @@ logging.basicConfig(
     stream=sys.stdout
 )
 
+
+import sys
 try:
     from picamera2 import Picamera2
     PICAMERA2_AVAILABLE = True
-except ImportError:
+except ImportError as e:
+    print(f"[DIAG] picamera2 import failed: {e}")
     PICAMERA2_AVAILABLE = False
+
+print(f"[DIAG] PICAMERA2_AVAILABLE: {PICAMERA2_AVAILABLE}")
+print(f"[DIAG] sys.platform: {sys.platform}")
 
 PREVIEW_PATH = "skysolve_next/web/solve/last_image.jpg"
 STATUS_PATH = "skysolve_next/web/worker_status.json"
@@ -33,7 +39,8 @@ class CameraCapture:
         self.latest_frame = None
         self.last_error = None
         self.picam = None
-        self.is_pi = PICAMERA2_AVAILABLE and sys.platform.startswith("linux")
+    self.is_pi = PICAMERA2_AVAILABLE and sys.platform.startswith("linux")
+    self.logger.info(f"[DIAG] CameraCapture init: is_pi={self.is_pi}, PICAMERA2_AVAILABLE={PICAMERA2_AVAILABLE}, sys.platform={sys.platform}")
         self.logger = logging.getLogger("skysolve.camera")
         if not self.logger.handlers:
             h = logging.StreamHandler()
@@ -48,7 +55,7 @@ class CameraCapture:
             except Exception as e:
                 self.last_error = f"Picamera2 init failed: {e}"
                 self.is_pi = False
-                self.logger.error(self.last_error)
+                self.logger.error(f"[DIAG] {self.last_error}")
 
     def configure_camera(self):
         cam_settings = self.settings.camera
