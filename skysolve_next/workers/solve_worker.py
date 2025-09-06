@@ -75,6 +75,20 @@ class CameraCapture:
         # No longer used; configuration is done once in __init__
         pass
 
+    def _parse_shutter(self, shutter_val):
+        """Parse shutter speed from float or fraction string."""
+        try:
+            if isinstance(shutter_val, (int, float)):
+                return float(shutter_val)
+            s = str(shutter_val).strip()
+            if '/' in s:
+                num, denom = s.split('/')
+                return float(num) / float(denom)
+            return float(s)
+        except Exception as e:
+            self.logger.warning(f"Could not parse shutter speed '{shutter_val}': {e}, defaulting to 1.0s")
+            return 1.0
+
     def capture(self):
         self.logger.debug("Starting image capture...")
         if self.is_pi and self.picam:
@@ -82,10 +96,14 @@ class CameraCapture:
                 # Reload camera settings before each capture
                 self.settings.reload_if_changed()
                 cam_settings = self.settings.camera
+                # Parse shutter and ISO
+                shutter_val = getattr(cam_settings, "shutter_speed", 1)
+                shutter = self._parse_shutter(shutter_val)
+                iso_val = getattr(cam_settings, "iso_speed", 100)
                 # Update controls if changed
                 controls = {
-                    "ExposureTime": int(float(cam_settings.shutter_speed) * 1e6),
-                    "AnalogueGain": float(cam_settings.iso_speed) / 100.0,
+                    "ExposureTime": int(shutter * 1e6),
+                    "AnalogueGain": float(iso_val) / 100.0,
                     "AeEnable": False
                 }
                 self.picam.set_controls(controls)
@@ -97,7 +115,6 @@ class CameraCapture:
                 self.logger.info("Image captured successfully.")
                 # Sleep for shutter speed to simulate exposure time
                 try:
-                    shutter = float(getattr(cam_settings, "shutter_speed", 1))
                     self.logger.debug(f"Sleeping for shutter speed: {shutter}s")
                     time.sleep(max(0.01, shutter))
                 except Exception as sleep_e:
