@@ -39,9 +39,9 @@ class CameraCapture:
         self.latest_frame = None
         self.last_error = None
         self.picam = None
-    self.is_pi = PICAMERA2_AVAILABLE and sys.platform.startswith("linux")
-    self.logger.info(f"[DIAG] CameraCapture init: is_pi={self.is_pi}, PICAMERA2_AVAILABLE={PICAMERA2_AVAILABLE}, sys.platform={sys.platform}")
+        self.is_pi = PICAMERA2_AVAILABLE and sys.platform.startswith("linux")
         self.logger = logging.getLogger("skysolve.camera")
+        self.logger.info(f"[DIAG] CameraCapture init: is_pi={self.is_pi}, PICAMERA2_AVAILABLE={PICAMERA2_AVAILABLE}, sys.platform={sys.platform}")
         if not self.logger.handlers:
             h = logging.StreamHandler()
             h.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
