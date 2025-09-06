@@ -114,8 +114,16 @@ class CameraCapture:
     def save_preview(self, frame):
         try:
             import cv2
+            import shutil
             cv2.imwrite(PREVIEW_PATH, frame)
             self.logger.debug(f"Preview image saved to {PREVIEW_PATH}")
+            # Also copy to image.jpg for UI preview
+            IMAGE_PATH = "skysolve_next/web/solve/image.jpg"
+            try:
+                shutil.copyfile(PREVIEW_PATH, IMAGE_PATH)
+                self.logger.debug(f"Preview image copied to {IMAGE_PATH}")
+            except Exception as copy_e:
+                self.logger.error(f"Failed to copy preview to {IMAGE_PATH}: {copy_e}")
         except Exception as e:
             self.last_error = f"Preview save failed: {e}"
             self.logger.error(self.last_error)
@@ -124,6 +132,13 @@ class CameraCapture:
                 with open(PREVIEW_PATH, "wb") as f:
                     f.write(frame.tobytes())
                 self.logger.debug(f"Preview image saved as raw bytes to {PREVIEW_PATH}")
+                # Also try to copy as raw bytes
+                IMAGE_PATH = "skysolve_next/web/solve/image.jpg"
+                try:
+                    shutil.copyfile(PREVIEW_PATH, IMAGE_PATH)
+                    self.logger.debug(f"Raw preview image copied to {IMAGE_PATH}")
+                except Exception as copy_e:
+                    self.logger.error(f"Failed to copy raw preview to {IMAGE_PATH}: {copy_e}")
             except Exception as e2:
                 self.last_error = f"Preview save failed: {e}; fallback failed: {e2}"
                 self.logger.error(self.last_error)
