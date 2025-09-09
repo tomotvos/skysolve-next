@@ -1,4 +1,5 @@
 from fastapi import FastAPI, WebSocket, Request, Body
+import logging
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from skysolve_next.core.config import settings
@@ -14,8 +15,18 @@ from threading import Lock
 from skysolve_next.solver.astrometry_solver import AstrometrySolver
 import logging
 
+
 app = FastAPI(title="Skysolve Next", version="0.1.0")
 app.mount("/static", StaticFiles(directory="skysolve_next/web/static"), name="static")
+
+# Middleware to set log level dynamically from settings
+@app.middleware("http")
+async def set_log_level_middleware(request: Request, call_next):
+    from skysolve_next.core.config import settings
+    log_level = getattr(settings, "log_level", "INFO").upper()
+    logging.getLogger().setLevel(getattr(logging, log_level, logging.INFO))
+    response = await call_next(request)
+    return response
 
 # Setup consistent logging
 logger = logging.getLogger("skysolve.app")

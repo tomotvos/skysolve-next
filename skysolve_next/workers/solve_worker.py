@@ -95,6 +95,9 @@ class CameraCapture:
             try:
                 # Reload camera settings before each capture
                 self.settings.reload_if_changed()
+                # Dynamically set logging level from settings
+                log_level = getattr(self.settings, "log_level", "INFO").upper()
+                logging.getLogger().setLevel(getattr(logging, log_level, logging.INFO))
                 cam_settings = self.settings.camera
                 # Parse shutter and ISO
                 shutter_val = getattr(cam_settings, "shutter_speed", 1)

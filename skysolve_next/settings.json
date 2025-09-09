@@ -1,5 +1,5 @@
 {
-  "mode": "test",
+  "mode": "solve",
   "web_port": 5001,
   "lx200_port": 5002,
   "solver": {
