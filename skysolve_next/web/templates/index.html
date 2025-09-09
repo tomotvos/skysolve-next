@@ -101,7 +101,7 @@
 </head>
 <body data-theme="day" class="min-h-screen antialiased">
   <header class="flex items-center justify-between p-4 bg-[var(--panel)]">
-    <div class="flex items-center space-x-3">
+  <div class="flex items-center space-x-3">
       <div class="text-xl font-semibold">SkySolve</div>
       <div id="status-chip" class="text-sm px-2 py-1 rounded-md font-semibold" style="background:var(--accent);color:#fff;">Status: <span id="status-label">OK</span></div>
       <div class="flex items-center space-x-2" id="mode-switch-group">
@@ -120,7 +120,14 @@
         </span>
         <span class="ml-2">Night</span>
       </label>
-      <button id="settings-btn" class="px-3 py-1 rounded-md border focus-ring">⚙</button>
+		<button id="power-btn" class="px-3 py-1 rounded-md border focus-ring" title="Power options"
+			style="font-size:1.5rem;line-height:1;display:flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;">
+			<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+				stroke-linecap="round" stroke-linejoin="round">
+				<path d="M12 2v10" />
+				<path d="M6.2 17.8A7 7 0 1 1 17.8 17.8" />
+			</svg>
+		</button>
     </div>
   </header>
   <main class="p-4 max-w-6xl mx-auto w-full">
@@ -229,6 +236,58 @@
     </div>
   </footer>
 <script>
+  // Power button handler with dialog for shutdown/restart
+  document.getElementById('power-btn').onclick = function() {
+    // Create dialog
+    const dlg = document.createElement('div');
+    dlg.style.position = 'fixed';
+    dlg.style.left = 0;
+    dlg.style.top = 0;
+    dlg.style.width = '100vw';
+    dlg.style.height = '100vh';
+    dlg.style.background = 'rgba(0,0,0,0.3)';
+    dlg.style.display = 'flex';
+    dlg.style.alignItems = 'center';
+    dlg.style.justifyContent = 'center';
+    dlg.style.zIndex = 10000;
+    dlg.innerHTML = `
+      <div style="background:#fff;padding:2em 2em 1.5em 2em;border-radius:12px;box-shadow:0 2px 16px #0003;min-width:260px;text-align:center;max-width:90vw;">
+        <div style="font-size:1.2rem;font-weight:600;margin-bottom:1em;">Would you like to shutdown or restart?</div>
+        <div style="display:flex;gap:1em;justify-content:center;">
+          <button id="dlg-shutdown" class="action-btn" style="min-width:100px;">Shutdown</button>
+          <button id="dlg-restart" class="action-btn" style="min-width:100px;">Restart</button>
+          <button id="dlg-cancel" class="action-btn" style="min-width:100px;background:#eee;color:#222;">Cancel</button>
+        </div>
+        <div id="dlg-error" style="color:#c00;margin-top:1em;display:none;"></div>
+      </div>
+    `;
+    document.body.appendChild(dlg);
+    function closeDlg() { document.body.removeChild(dlg); }
+    dlg.querySelector('#dlg-cancel').onclick = closeDlg;
+    dlg.querySelector('#dlg-shutdown').onclick = function() {
+      fetch('/system/shutdown', {method:'POST'})
+        .then(r => r.json())
+        .then(j => {
+          if(j.result === 'success') { closeDlg(); alert(j.message); }
+          else { showError(j.message || 'Shutdown failed.'); }
+        })
+        .catch(() => { showError('Failed to send shutdown command.'); });
+    };
+    dlg.querySelector('#dlg-restart').onclick = function() {
+      fetch('/system/restart', {method:'POST'})
+        .then(r => r.json())
+        .then(j => {
+          if(j.result === 'success') { closeDlg(); alert(j.message); }
+          else { showError(j.message || 'Restart failed.'); }
+        })
+        .catch(() => { showError('Failed to send restart command.'); });
+    };
+    function showError(msg) {
+      const err = dlg.querySelector('#dlg-error');
+      err.textContent = msg;
+      err.style.display = '';
+    }
+  };
 document.addEventListener('DOMContentLoaded', function() {
   // Theme slider switch
   const themeToggle = document.getElementById('theme-toggle');

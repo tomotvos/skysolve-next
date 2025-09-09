@@ -2,6 +2,7 @@
   "mode": "solve",
   "web_port": 5001,
   "lx200_port": 5002,
+  "log_level": "DEBUG",
   "solver": {
     "type": "astrometry",
     "hint_timeout": 10,

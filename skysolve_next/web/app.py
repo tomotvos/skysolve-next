@@ -1,32 +1,31 @@
-from fastapi import FastAPI, WebSocket, Request, Body
-import logging
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
-from fastapi.staticfiles import StaticFiles
-from skysolve_next.core.config import settings
-from skysolve_next.core.models import SolveResult
-from pydantic_settings import BaseSettings
 import os
 import json
 import shutil
 import subprocess
 import re
 import time
-from threading import Lock
-from skysolve_next.solver.astrometry_solver import AstrometrySolver
 import logging
+from threading import Lock
+from fastapi import FastAPI, WebSocket, Request, Body, status as http_status, HTTPException
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
+from skysolve_next.core.config import settings
+from skysolve_next.core.models import SolveResult
+from pydantic_settings import BaseSettings
+from skysolve_next.solver.astrometry_solver import AstrometrySolver
 
-
+# --- Core app and globals ---
 app = FastAPI(title="Skysolve Next", version="0.1.0")
 app.mount("/static", StaticFiles(directory="skysolve_next/web/static"), name="static")
 
-# Middleware to set log level dynamically from settings
-@app.middleware("http")
-async def set_log_level_middleware(request: Request, call_next):
-    from skysolve_next.core.config import settings
-    log_level = getattr(settings, "log_level", "INFO").upper()
-    logging.getLogger().setLevel(getattr(logging, log_level, logging.INFO))
-    response = await call_next(request)
-    return response
+# Serve the main UI at root
+@app.get("/", response_class=HTMLResponse)
+def root():
+    try:
+        with open("skysolve_next/web/templates/index.html", "r", encoding="utf-8") as f:
+            return HTMLResponse(f.read())
+    except Exception as e:
+        return HTMLResponse(f"<h1>Error loading UI: {e}</h1>", status_code=500)
 
 # Setup consistent logging
 logger = logging.getLogger("skysolve.app")
@@ -36,41 +35,18 @@ if not logger.handlers:
     logger.addHandler(h)
 logger.setLevel(logging.DEBUG)
 
+# Shared status globals
 STATUS = {"mode": "solve", "fps": 0.0, "last_conf": None}
-LAST: SolveResult | None = None
+LAST_SOLVE = {"ra": None, "dec": None, "timestamp": None}
 
-@app.get("/status")
-def status():
-    settings.reload_if_changed()
-    return {"mode": settings.mode, "fps": STATUS["fps"], "last_conf": STATUS["last_conf"]}
-
-@app.post("/mode")
-def set_mode(payload: dict = Body(...)):
-    mode = payload.get("mode", "solve")
-    STATUS["mode"] = mode
-    settings.mode = mode
-    # Save mode to settings.json
-    import json
-    with open("skysolve_next/settings.json", "r") as f:
-        data = json.load(f)
-    data["mode"] = mode
-    with open("skysolve_next/settings.json", "w") as f:
-        json.dump(data, f, indent=2)
-    return STATUS
-
-@app.get("/")
-def ui():
-    with open("skysolve_next/web/templates/index.html", "r", encoding="utf-8") as f:
-        return HTMLResponse(f.read())
-
-@app.websocket("/events")
-async def events(ws: WebSocket):
-    await ws.accept()
-    await ws.send_json({"event": "hello", "port_web": settings.web_port})
-
-@app.get("/static/demo.jpg")
-def get_demo_image():
-    return FileResponse("skysolve_next/web/static/demo.jpg")
+# Middleware to set log level dynamically from settings
+@app.middleware("http")
+async def set_log_level_middleware(request: Request, call_next):
+    from skysolve_next.core.config import settings
+    log_level = getattr(settings, "log_level", "INFO").upper()
+    logging.getLogger().setLevel(getattr(logging, log_level, logging.INFO))
+    response = await call_next(request)
+    return response
 
 WELL_KNOWN_IMAGE_PATH = "skysolve_next/web/solve/last_image.jpg"
 DEMO_IMAGE_PATH = "skysolve_next/web/static/demo.jpg"
@@ -84,6 +60,9 @@ LAST_SOLVE = {
 }
 DEFAULT_SOLVE_RADIUS = 20.0  # degrees
 
+
+def get_demo_image():
+    return FileResponse(DEMO_IMAGE_PATH)
 
 def write_status(mode, ra, dec, confidence, error=None):
     import time, json, os
@@ -188,6 +167,31 @@ def get_solve_image_legacy():
     if not os.path.exists(SOLVE_IMAGE_PATH):
         raise HTTPException(status_code=404, detail="Solve image not found.")
     return FileResponse(SOLVE_IMAGE_PATH)
+
+
+
+# System control endpoints (shutdown/restart)
+@app.post("/system/shutdown", status_code=http_status.HTTP_202_ACCEPTED)
+def system_shutdown():
+    import sys
+    if not sys.platform.startswith("linux"):
+        return {"result": "error", "message": "Shutdown only supported on Linux."}
+    try:
+        subprocess.Popen(["sudo", "shutdown", "-h", "now"])
+        return {"result": "success", "message": "Shutdown command sent."}
+    except Exception as e:
+        return {"result": "error", "message": str(e)}
+
+@app.post("/system/restart", status_code=http_status.HTTP_202_ACCEPTED)
+def system_restart():
+    import sys
+    if not sys.platform.startswith("linux"):
+        return {"result": "error", "message": "Restart only supported on Linux."}
+    try:
+        subprocess.Popen(["sudo", "reboot"])
+        return {"result": "success", "message": "Restart command sent."}
+    except Exception as e:
+        return {"result": "error", "message": str(e)}
 
 @app.post("/onstep/push")
 def push_onstep():
