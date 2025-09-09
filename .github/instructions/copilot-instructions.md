@@ -1,24 +1,22 @@
-# skysolve.instructions.md
+# copilot-instructions.md
 
 > Repo-level guidance for developer agents (Copilot / VS Code agent mode) and humans.
 > This file intentionally *does not* hard-code task priorities. Instead it points to the canonical implementation checklist and instructs agents to check items off there as they are completed: `docs/SKYSOLVE_NEXT_IMPLEMENTATION_PLAN.md` (or `docs/` equivalent).
 
 ## Where to look first (required)
-1. Implementation plan / checklist: `docs/SKYSOLVE_NEXT_IMPLEMENTATION_PLAN.md` — **use this as the single source of truth** for feature priorities and task ordering. Mark items completed in that document as you finish them. Agents must not duplicate the checklist here; they should reference it.
-2. Architecture overview: top-level package `skysolve_next/` and these directories: `solvers/`, `publish/`, `workers/`, `onstep/`, `web/`, `config/`, `scripts/`, `docs/`.
+1. Functional requirements: `docs/*.md`
+1. Architecture overview: top-level package `skysolve_next/` and these directories: `solvers/`, `publish/`, `workers/`, `onstep/`, `web/`, `config/`, `scripts/`, `docs/`.
+1. Legacy reference implementation: `skysolve_legacy`
+1. Before starting any new work, be **fully** aware of the requirements, existing codebase and its structure.
 
 ---
 
 ## Development & runtime targets
-- **Develop on macOS** (local dev, faster iteration). **Deploy to Raspberry Pi (Raspbian / Raspberry Pi OS)** for runtime/production. The repository must support both platforms:
+- **Develop on macOS** (local dev, faster iteration). 
+**Deploy to Raspberry Pi (Raspbian / Raspberry Pi OS)** for runtime/production. The repository must support both platforms:
   - Target Python runtime: **Python 3.11** (use the same minor version on Mac and Pi).
   - Use a venv created with `python3.11 -m venv --copies .venv` to avoid symlink issues with Homebrew Python on macOS.
   - Camera hardware access / drivers are Pi-specific: for local dev on macOS, use mocks or pre-recorded images. Tests must avoid requiring physical camera hardware.
-
----
-
-## Use the canonical implementation plan for priorities
-- The implementation plan in `docs/SKYSOLVE_NEXT_IMPLEMENTATION_PLAN.md` contains the ordered checklist. All agents and contributors **must** consult and update that file — check items off as they are completed and add any new tasks there (with a short description and owner).
 
 ---
 
