@@ -149,17 +149,28 @@ class CaptureHandler(logging.Handler):
 class SkySolveLogger:
     """Centralized logger management for SkySolve Next"""
     
-    def __init__(self):
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
         self.loggers: Dict[str, logging.Logger] = {}
         self.capture = LogCapture()
         self._current_level = logging.INFO
         self._lock = threading.Lock()
+        self.config = config or {}
         
         # Configure root logger
         self._setup_root_logger()
         
         # Start monitoring shared log file for inter-process logs
         self.start_log_file_monitor()
+    
+    def _get_rotation_settings(self):
+        """Get log rotation settings from config with defaults"""
+        logging_config = self.config.get('logging', {})
+        rotation_config = logging_config.get('rotation', {})
+        
+        max_size_mb = rotation_config.get('max_file_size_mb', 10)
+        backup_count = rotation_config.get('backup_count', 5)
+        
+        return max_size_mb * 1024 * 1024, backup_count  # Convert MB to bytes
     
     def _setup_root_logger(self):
         """Setup the root logger configuration"""
@@ -186,14 +197,21 @@ class SkySolveLogger:
         self._setup_shared_file_handler(root_logger)
     
     def _setup_shared_file_handler(self, root_logger):
-        """Setup shared file handler for inter-process log sharing"""
+        """Setup shared file handler for inter-process log sharing with rotation"""
         try:
             # Ensure log directory exists
             log_dir = os.path.dirname(SHARED_LOG_FILE)
             os.makedirs(log_dir, exist_ok=True)
             
-            # Add file handler with JSON formatting for structured logs
-            file_handler = logging.FileHandler(SHARED_LOG_FILE, mode='a')
+            # Get rotation settings from config
+            max_bytes, backup_count = self._get_rotation_settings()
+            
+            # Add rotating file handler with JSON formatting for structured logs
+            file_handler = logging.handlers.RotatingFileHandler(
+                SHARED_LOG_FILE, 
+                maxBytes=max_bytes,
+                backupCount=backup_count
+            )
             file_handler.setLevel(logging.DEBUG)
             file_handler.setFormatter(StructuredFormatter())
             root_logger.addHandler(file_handler)
@@ -319,11 +337,21 @@ class SkySolveLogger:
 # Global logger manager instance
 _logger_manager: Optional[SkySolveLogger] = None
 
+def _load_config() -> Dict[str, Any]:
+    """Load configuration for logging setup"""
+    try:
+        from skysolve_next.core.config import settings
+        return settings.model_dump()
+    except Exception:
+        # Return empty config if settings can't be loaded
+        return {}
+
 def get_logger_manager() -> SkySolveLogger:
     """Get the global logger manager instance"""
     global _logger_manager
     if _logger_manager is None:
-        _logger_manager = SkySolveLogger()
+        config = _load_config()
+        _logger_manager = SkySolveLogger(config)
     return _logger_manager
 
 def get_logger(name: str, component: str = "skysolve") -> logging.Logger:

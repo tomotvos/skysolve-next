@@ -15,3 +15,6 @@ build/
 skysolve_legacy
 skysolve_next/web/solve/
 skysolve_next/web/worker_status.json
+# Ignore log files but keep directory structure
+skysolve_next/logs/*.jsonl
+skysolve_next/logs/*.log

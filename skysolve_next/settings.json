@@ -17,5 +17,13 @@
     "host": "localhost",
     "port": 9998,
     "enabled": false
+  },
+  "logging": {
+    "level": "INFO",
+    "structured": false,
+    "rotation": {
+      "max_file_size_mb": 10,
+      "backup_count": 5
+    }
   }
 }
