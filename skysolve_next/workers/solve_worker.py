@@ -9,14 +9,10 @@ from skysolve_next.solver.tetra3_solver import Tetra3Solver
 from skysolve_next.solver.astrometry_solver import AstrometrySolver
 from skysolve_next.publish.lx200_server import LX200Server
 from skysolve_next.mounts.onstep.lx200 import OnStepClient
+from skysolve_next.core.logging_config import get_logger, set_log_level
 
-
-# Ensure all logs go to stdout for VS Code Debug Console
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
-    stream=sys.stdout
-)
+# Initialize centralized logging
+set_log_level(getattr(settings.logging, 'level', settings.log_level))
 
 
 import sys
@@ -40,13 +36,8 @@ class CameraCapture:
         self.last_error = None
         self.picam = None
         self.is_pi = PICAMERA2_AVAILABLE and sys.platform.startswith("linux")
-        self.logger = logging.getLogger("skysolve.camera")
+        self.logger = get_logger("camera_capture", "camera")
         self.logger.info(f"[DIAG] CameraCapture init: is_pi={self.is_pi}, PICAMERA2_AVAILABLE={PICAMERA2_AVAILABLE}, sys.platform={sys.platform}")
-        if not self.logger.handlers:
-            h = logging.StreamHandler()
-            h.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
-            self.logger.addHandler(h)
-        self.logger.setLevel(logging.DEBUG)
         if self.is_pi:
             try:
                 from picamera2 import Picamera2
@@ -95,9 +86,6 @@ class CameraCapture:
             try:
                 # Reload camera settings before each capture
                 self.settings.reload_if_changed()
-                # Dynamically set logging level from settings
-                log_level = getattr(self.settings, "log_level", "INFO").upper()
-                logging.getLogger().setLevel(getattr(logging, log_level, logging.INFO))
                 cam_settings = self.settings.camera
                 # Parse shutter and ISO
                 shutter_val = getattr(cam_settings, "shutter_speed", 1)
@@ -225,12 +213,7 @@ def write_status(mode, res, error=None):
     pass  # Removed for single-threaded mode
 
 def main():
-    logger = logging.getLogger("skysolve.main")
-    if not logger.handlers:
-        h = logging.StreamHandler()
-        h.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
-        logger.addHandler(h)
-    logger.setLevel(logging.DEBUG)
+    logger = get_logger("solve_worker_main", "worker")
 
     logger.info(f"Starting LX200 server on port {settings.lx200_port}")
     lx200 = LX200Server(port=settings.lx200_port)
@@ -317,19 +300,6 @@ def main():
             time.sleep(1.0)
 
     pass  # Removed for single-threaded mode
-
-    logger = logging.getLogger("skysolve.main")
-    if not logger.handlers:
-        h = logging.StreamHandler()
-        h.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
-        logger.addHandler(h)
-    logger.setLevel(logging.DEBUG)
-
-    logger.info(f"Starting LX200 server on port {settings.lx200_port}")
-    lx200 = LX200Server(port=settings.lx200_port)
-    lx200.start()
-
-    onstep = OnStepClient() if settings.onstep.enabled else None
     if onstep:
         logger.info("OnStep client enabled.")
 

@@ -8,14 +8,10 @@ from typing import Optional, Deque
 from collections import deque
 from skysolve_next.core.config import settings
 from skysolve_next.core.models import SolveResult
+from skysolve_next.core.logging_config import get_logger
 
-# --- Logging setup (safe default) ---
-_logger = logging.getLogger("skysolve.lx200")
-if not _logger.handlers:
-    h = logging.StreamHandler()
-    h.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
-    _logger.addHandler(h)
-_logger.setLevel(logging.DEBUG)
+# --- Logging setup using centralized configuration ---
+_logger = get_logger("lx200_server", "network")
 
 # --- Rotating in-memory debug store (and persisted tail) ---
 _DEBUG_LOG_PATH = "/tmp/skysolve-lx200-debug.log"
@@ -65,7 +61,7 @@ class LX200Server:
                 _logger.exception("accept failed: %s", e)
                 time.sleep(0.5)
                 continue
-            _logger.info("Accepted connection from %s:%d", addr[0], addr[1])
+            _logger.debug("Accepted connection from %s:%d", addr[0], addr[1])
             _record_debug(f"ACCEPT {addr[0]}:{addr[1]}")
             t = threading.Thread(target=self._client_loop, args=(conn, addr), daemon=True)
             t.start()
@@ -82,7 +78,7 @@ class LX200Server:
                     continue
                 if not chunk:
                     break
-                # log raw bytes
+                # log raw bytes only at debug level
                 hexb = binascii.hexlify(chunk).decode()
                 txt = chunk.decode(errors="replace")
                 _logger.debug("recv %d bytes from %s:%d -> hex=%s text=%r", len(chunk), addr[0], addr[1], hexb, txt)
@@ -105,13 +101,13 @@ class LX200Server:
                     _record_debug(f"CMD {addr[0]}:{addr[1]} {cmd}")
                     self._handle_command(conn, cmd)
         except Exception as e:
-            _logger.exception("client loop error for %s:%d: %s", addr[0], addr[1], e)
+            _logger.error("client loop error for %s:%d: %s", addr[0], addr[1], e)
         finally:
             try:
                 conn.close()
             except Exception:
                 pass
-            _logger.info("Connection closed %s:%d", addr[0], addr[1])
+            _logger.debug("Connection closed %s:%d", addr[0], addr[1])
             _record_debug(f"CLOSE {addr[0]}:{addr[1]}")
 
     def _send_and_log(self, conn: socket.socket, resp: bytes) -> None:

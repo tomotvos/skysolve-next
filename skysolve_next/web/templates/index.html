@@ -223,10 +223,14 @@
     </section>
     <section class="bg-[var(--panel)] rounded-lg p-4">
       <div class="flex items-center justify-between">
-        <h3 class="text-sm font-semibold">History</h3>
-        <button id="clear-history" class="text-sm px-2 py-1 border rounded-md focus-ring">Clear</button>
+        <h3 class="text-sm font-semibold">Real-time Logs</h3>
+        <div class="flex gap-2">
+          <button id="pause-logs" class="text-sm px-2 py-1 border rounded-md focus-ring">Pause</button>
+          <button id="clear-logs" class="text-sm px-2 py-1 border rounded-md focus-ring">Clear</button>
+        </div>
       </div>
-      <ul id="history" class="mt-3 space-y-2 text-sm log-area" style="height: 25em; max-height: 25em; overflow-y: auto; background: var(--log-bg, #222); color: var(--log-fg, #eee); padding: 8px; border-radius: 8px;"></ul>
+      <div id="log-status" class="text-xs mt-1 text-gray-400">Connecting to log stream...</div>
+      <div id="logs-container" class="mt-3 text-sm log-area" style="height: 25em; max-height: 25em; overflow-y: auto; background: var(--log-bg, #222); color: var(--log-fg, #eee); padding: 8px; border-radius: 8px; font-family: monospace; line-height: 1.2;"></div>
     </section>
   </main>
   <footer class="fixed left-0 right-0 bottom-0 p-2 bg-[var(--panel)]">
@@ -470,28 +474,45 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('onstep-port').addEventListener('change', function() {
     saveSetting('onstep', 'port', this.value);
   });
-  document.getElementById('clear-history').onclick = function() {
-    const history = document.getElementById('history');
-    history.innerHTML = "";
-  };
+  // Clear history functionality (if elements exist)
+  const clearHistoryBtn = document.getElementById('clear-history');
+  if (clearHistoryBtn) {
+    clearHistoryBtn.onclick = function() {
+      const history = document.getElementById('history');
+      if (history) {
+        history.innerHTML = "";
+      }
+    };
+  }
   // Mode switch radio group wiring
   const modeRadios = document.querySelectorAll('.mode-radio');
   function setMode(mode) {
+    console.log('setMode called with:', mode);
     fetch('/mode', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({mode})
-    }).then(() => {
+    }).then(response => {
+      console.log('Mode change response:', response.status);
+      return response.json();
+    }).then(data => {
+      console.log('Mode change data:', data);
       setStatusBadge('OK');
       updateActionButtons(mode);
       localStorage.setItem('skysolve_mode', mode); // Save mode persistently
-    }).catch(() => {
+    }).catch(err => {
+      console.error('Mode change error:', err);
       setStatusBadge('Error');
     });
   }
   function updateActionButtons(mode) {
+    console.log('updateActionButtons called with mode:', mode);
     const form = document.getElementById('solve-form');
-    form.style.display = (mode === 'test') ? '' : 'none';
+    console.log('Found form element:', form);
+    const shouldShow = (mode === 'test');
+    console.log('Should show form:', shouldShow);
+    form.style.display = shouldShow ? '' : 'none';
+    console.log('Form display set to:', form.style.display);
   }
   modeRadios.forEach(radio => {
     radio.addEventListener('change', function() {
@@ -503,14 +524,20 @@ document.addEventListener('DOMContentLoaded', function() {
   });
   // On page load, fetch mode from backend and persist in localStorage
   fetch('/status').then(r => r.json()).then(j => {
+    console.log('Status response:', j);
     const mode = j.mode || localStorage.getItem('skysolve_mode');
+    console.log('Selected mode:', mode);
     if (mode) {
       modeRadios.forEach(radio => {
+        console.log('Setting radio:', radio.value, 'checked:', radio.value === mode);
         radio.checked = (radio.value === mode);
       });
+      console.log('Calling updateActionButtons with mode:', mode);
       updateActionButtons(mode);
       localStorage.setItem('skysolve_mode', mode);
     }
+  }).catch(err => {
+    console.error('Error fetching status:', err);
   });
 
   // Poll worker status and update Last Solve panel
@@ -595,7 +622,141 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   document.getElementById('shutter-speed').addEventListener('change', startPreviewPolling);
   startPreviewPolling();
+
+  // Real-time log streaming
+  let logWebSocket = null;
+  let logsPaused = false;
+  let maxLogEntries = 500;
+  
+  function formatLogEntry(entry) {
+    const timestamp = new Date(entry.timestamp).toLocaleTimeString();
+    const levelClass = `log-${entry.level.toLowerCase()}`;
+    const component = entry.logger ? `[${entry.logger.split('.').pop()}]` : '';
+    return `<div class="log-entry ${levelClass}" data-level="${entry.level}">` +
+           `<span class="log-timestamp">${timestamp}</span> ` +
+           `<span class="log-level">${entry.level}</span> ` +
+           `<span class="log-component">${component}</span> ` +
+           `<span class="log-message">${entry.message}</span>` +
+           `</div>`;
+  }
+  
+  function addLogEntry(entry) {
+    if (logsPaused) return;
+    
+    const container = document.getElementById('logs-container');
+    const logElement = document.createElement('div');
+    logElement.innerHTML = formatLogEntry(entry);
+    
+    container.appendChild(logElement.firstChild);
+    
+    // Remove old entries if we have too many
+    const entries = container.children;
+    while (entries.length > maxLogEntries) {
+      container.removeChild(entries[0]);
+    }
+    
+    // Auto-scroll to bottom unless user has scrolled up
+    if (container.scrollTop >= container.scrollHeight - container.clientHeight - 50) {
+      container.scrollTop = container.scrollHeight;
+    }
+  }
+  
+  function connectLogWebSocket() {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/ws/logs`;
+    
+    logWebSocket = new WebSocket(wsUrl);
+    
+    logWebSocket.onopen = function() {
+      document.getElementById('log-status').textContent = 'Connected - receiving live logs';
+      document.getElementById('log-status').style.color = 'green';
+    };
+    
+    logWebSocket.onmessage = function(event) {
+      try {
+        const logEntry = JSON.parse(event.data);
+        // Ignore ping messages
+        if (logEntry.type === 'ping') {
+          return;
+        }
+        addLogEntry(logEntry);
+      } catch (e) {
+        console.error('Failed to parse log entry:', e);
+      }
+    };
+    
+    logWebSocket.onclose = function() {
+      document.getElementById('log-status').textContent = 'Disconnected - attempting to reconnect...';
+      document.getElementById('log-status').style.color = 'orange';
+      
+      // Attempt to reconnect after 2 seconds
+      setTimeout(connectLogWebSocket, 2000);
+    };
+    
+    logWebSocket.onerror = function() {
+      document.getElementById('log-status').textContent = 'Connection error';
+      document.getElementById('log-status').style.color = 'red';
+    };
+  }
+  
+  // Log control buttons
+  document.getElementById('pause-logs').addEventListener('click', function() {
+    logsPaused = !logsPaused;
+    this.textContent = logsPaused ? 'Resume' : 'Pause';
+    document.getElementById('log-status').textContent = logsPaused ? 'Paused' : 'Connected - receiving live logs';
+  });
+  
+  document.getElementById('clear-logs').addEventListener('click', function() {
+    document.getElementById('logs-container').innerHTML = '';
+  });
+  
+  // Load initial logs and start WebSocket connection
+  fetch('/logs?count=50')
+    .then(r => r.json())
+    .then(data => {
+      data.logs.forEach(addLogEntry);
+    })
+    .catch(console.error)
+    .finally(() => {
+      connectLogWebSocket();
+    });
 });
 </script>
+
+<style>
+  .log-entry {
+    margin-bottom: 2px;
+    font-size: 12px;
+  }
+  
+  .log-timestamp {
+    color: #888;
+    margin-right: 8px;
+  }
+  
+  .log-level {
+    font-weight: bold;
+    margin-right: 8px;
+    min-width: 50px;
+    display: inline-block;
+  }
+  
+  .log-component {
+    color: #66d9ff;
+    margin-right: 8px;
+    font-weight: 500;
+  }
+  
+  .log-message {
+    color: #eee;
+  }
+  
+  .log-debug .log-level { color: #888; }
+  .log-info .log-level { color: #4a9eff; }
+  .log-warning .log-level { color: #ffa500; }
+  .log-error .log-level { color: #ff4444; }
+  .log-critical .log-level { color: #ff0000; }
+</style>
+
 </body>
 </html>

@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic import Field, validator
+from typing import Literal
 import os
 import json
 
@@ -19,18 +20,32 @@ class OnStepSettings(BaseSettings):
     port: int = 9998
     enabled: bool = False
 
+class LogRotationSettings(BaseSettings):
+    max_file_size_mb: int = 10
+    backup_count: int = 5
+
+class LoggingSettings(BaseSettings):
+    level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+    structured: bool = False  # Enable JSON structured logging
+    rotation: LogRotationSettings = Field(default_factory=LogRotationSettings)
+
 class Settings(BaseSettings):
     mode: str = Field(default="test")  # solve|align|demo|test
     web_port: int = 5001
     lx200_port: int = 5002
+    log_level: str = Field(default="INFO")  # Backward compatibility
     solver: SolverSettings = Field(default_factory=SolverSettings)
     camera: CameraSettings = Field(default_factory=CameraSettings)
     onstep: OnStepSettings = Field(default_factory=OnStepSettings)
+    logging: LoggingSettings = Field(default_factory=LoggingSettings)
 
     _config_path = "skysolve_next/settings.json"
     _last_mtime = None
 
     def reload_if_changed(self):
+        # Import here to avoid circular imports
+        from skysolve_next.core.logging_config import set_log_level
+        
         if not os.path.exists(self._config_path):
             # Create default settings.json if missing
             with open(self._config_path, "w") as f:
@@ -39,8 +54,11 @@ class Settings(BaseSettings):
             return
         mtime = os.path.getmtime(self._config_path)
         if self._last_mtime is None or mtime > self._last_mtime:
+            old_log_level = getattr(self.logging, 'level', self.log_level)
+            
             with open(self._config_path, "r") as f:
                 data = json.load(f)
+            
             # Only update known fields
             for k, v in data.items():
                 if hasattr(self, k):
@@ -51,7 +69,19 @@ class Settings(BaseSettings):
                                 setattr(field, subk, subv)
                     else:
                         setattr(self, k, v)
+            
+            # Update log level dynamically if it changed
+            new_log_level = getattr(self.logging, 'level', self.log_level)
+            if old_log_level != new_log_level:
+                set_log_level(new_log_level)
+            
             self._last_mtime = mtime
+
+    def save(self):
+        """Save current settings to file"""
+        with open(self._config_path, "w") as f:
+            json.dump(self.model_dump(), f, indent=2)
+        self._last_mtime = os.path.getmtime(self._config_path)
 
     class Config:
         env_prefix = "SKYSOLVE_"

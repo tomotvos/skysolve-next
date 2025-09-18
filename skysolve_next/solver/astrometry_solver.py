@@ -4,13 +4,14 @@ import json
 import logging
 from skysolve_next.solver.base import Solver
 from skysolve_next.core.models import SolveResult
+from skysolve_next.core.logging_config import get_logger
 
 class AstrometrySolver(Solver):
     def __init__(self, solve_field_path: str = "solve-field", timeout: int = 60, max_retries: int = 2) -> None:
         self.solve_field_path = solve_field_path
         self.timeout = timeout
         self.max_retries = max_retries
-        self.logger = logging.getLogger("AstrometrySolver")
+        self.logger = get_logger("astrometry_solver", "solver")
 
     def solve(self, image_path: str, ra_hint: float = None, dec_hint: float = None, radius_hint: float = None, log=None) -> SolveResult:
         import re, time, json

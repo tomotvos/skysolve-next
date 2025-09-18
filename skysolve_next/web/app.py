@@ -5,14 +5,17 @@ import subprocess
 import re
 import time
 import logging
+import asyncio
+import threading
 from threading import Lock
-from fastapi import FastAPI, WebSocket, Request, Body, status as http_status, HTTPException
+from fastapi import FastAPI, WebSocket, Request, Body, status as http_status, HTTPException, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from skysolve_next.core.config import settings
 from skysolve_next.core.models import SolveResult
 from pydantic_settings import BaseSettings
 from skysolve_next.solver.astrometry_solver import AstrometrySolver
+from skysolve_next.core.logging_config import get_logger, get_recent_logs, add_log_listener, remove_log_listener
 
 # --- Core app and globals ---
 app = FastAPI(title="Skysolve Next", version="0.1.0")
@@ -27,24 +30,21 @@ def root():
     except Exception as e:
         return HTMLResponse(f"<h1>Error loading UI: {e}</h1>", status_code=500)
 
-# Setup consistent logging
-logger = logging.getLogger("skysolve.app")
-if not logger.handlers:
-    h = logging.StreamHandler()
-    h.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
-    logger.addHandler(h)
-logger.setLevel(logging.DEBUG)
+# Setup consistent logging using centralized configuration
+logger = get_logger("web_app", "web")
+
+# Initialize logging and generate a startup message
+# Temporarily commented out to test deadlock theory
+# logger.info("SkySolve Next web application starting up")
 
 # Shared status globals
 STATUS = {"mode": "solve", "fps": 0.0, "last_conf": None}
 LAST_SOLVE = {"ra": None, "dec": None, "timestamp": None}
 
-# Middleware to set log level dynamically from settings
+# Middleware to reload settings dynamically (log level is handled in config.py)
 @app.middleware("http")
-async def set_log_level_middleware(request: Request, call_next):
-    from skysolve_next.core.config import settings
-    log_level = getattr(settings, "log_level", "INFO").upper()
-    logging.getLogger().setLevel(getattr(logging, log_level, logging.INFO))
+async def reload_settings_middleware(request: Request, call_next):
+    settings.reload_if_changed()
     response = await call_next(request)
     return response
 
@@ -272,3 +272,88 @@ def worker_status():
     if not worker_running:
         status['error'] = 'No worker status available'
     return status
+
+@app.get("/status")
+def get_status():
+    """Get current application status including mode"""
+    settings.reload_if_changed()
+    return {
+        "mode": settings.mode,
+        "status": "running"
+    }
+
+@app.post("/mode")
+def set_mode(payload: dict = Body(...)):
+    """Set the application mode"""
+    mode = payload.get("mode")
+    if mode not in ["solve", "align", "test"]:
+        raise HTTPException(status_code=400, detail="Invalid mode")
+    
+    settings.reload_if_changed()
+    settings.mode = mode
+    settings.save()
+    logger.info(f"Application mode changed to: {mode}")
+    return {"result": "success", "mode": mode}
+
+@app.get("/logs")
+def get_logs(count: int = 100):
+    """Get recent log entries"""
+    print(f"DEBUG: /logs endpoint called with count={count}")
+    try:
+        logs = get_recent_logs(count)
+        print(f"DEBUG: Retrieved {len(logs)} log entries")
+        return {"logs": logs}
+    except Exception as e:
+        print(f"DEBUG: Error getting logs: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"logs": [], "error": str(e)}
+
+@app.websocket("/ws/logs")
+async def websocket_logs(websocket: WebSocket):
+    """WebSocket endpoint for real-time log streaming"""
+    await websocket.accept()
+    logger.info("Log streaming WebSocket connected")
+    
+    # Queue to receive new log entries
+    log_queue = asyncio.Queue()
+    
+    # Callback function to add new logs to the queue
+    def log_listener(log_entry):
+        try:
+            # Use put_nowait to avoid blocking the logging thread
+            log_queue.put_nowait(log_entry)
+        except asyncio.QueueFull:
+            # If queue is full, skip this log entry
+            pass
+    
+    try:
+        # Add listener for new log entries
+        add_log_listener(log_listener)
+        
+        # Send recent logs first
+        recent_logs = get_recent_logs(50)
+        for log_entry in recent_logs:
+            await websocket.send_json(log_entry)
+        
+        # Stream new log entries in real-time
+        while True:
+            try:
+                # Wait for new log entry or check if connection is still alive
+                log_entry = await asyncio.wait_for(log_queue.get(), timeout=1.0)
+                await websocket.send_json(log_entry)
+            except asyncio.TimeoutError:
+                # Send ping to keep connection alive
+                try:
+                    await websocket.send_json({"type": "ping"})
+                except WebSocketDisconnect:
+                    break
+            except WebSocketDisconnect:
+                break
+                
+    except WebSocketDisconnect:
+        pass
+    finally:
+        # Clean up listener
+        remove_log_listener(log_listener)
+        logger.info("Log streaming WebSocket disconnected")
