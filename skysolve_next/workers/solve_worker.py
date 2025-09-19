@@ -212,78 +212,99 @@ def write_status(mode, res, error=None):
 
     pass  # Removed for single-threaded mode
 
-def main():
+def process_solve_mode(camera, last_ra, last_dec):
+    """Process solve mode: capture frame and run solver."""
     logger = get_logger("solve_worker_main", "worker")
+    
+    logger.info("Solve mode: capturing frame and running solver.")
+    frame = camera.capture()
+    error = None
+    res = SolveResult(ra_deg=None, dec_deg=None, roll_deg=None, plate_scale_arcsec_px=None, confidence=None)
+    
+    try:
+        # Choose primary and fallback solvers
+        if settings.solver.type == "tetra3":
+            primary = Tetra3Solver()
+            fallback = AstrometrySolver()
+        else:
+            primary = AstrometrySolver()
+            fallback = Tetra3Solver()
+        
+        logger.info("Running primary solver...")
+        input_data = PREVIEW_PATH
+        
+        # Use hints if available
+        if last_ra is not None and last_dec is not None:
+            res = primary.solve(input_data, ra_hint=last_ra, dec_hint=last_dec, radius_hint=settings.solver.solve_radius)
+        else:
+            res = primary.solve(input_data)
+        
+        logger.info(f"Primary solver result: confidence={getattr(res, 'confidence', None)}")
+        
+        # Validate confidence
+        conf = res.confidence
+        try:
+            conf_val = float(conf)
+        except (TypeError, ValueError):
+            conf_val = 1.0
+            
+        # TODO: fallback logic can be restored here if needed
+        
+    except Exception as e:
+        error = f"Solver error: {e}"
+        camera.last_error = error
+        logger.error(error)
+        conf_val = 0.0
+    
+    return res, error, conf_val
 
-    logger.info(f"Starting LX200 server on port {settings.lx200_port}")
-    lx200 = LX200Server(port=settings.lx200_port)
-    lx200.start()
 
-    onstep = OnStepClient() if settings.onstep.enabled else None
-    if onstep:
-        logger.info("OnStep client enabled.")
-
-    logger.info(f"Mode: {settings.mode}")
-
-    camera = CameraCapture(settings)
+def run_solve_loop(camera, lx200, onstep):
+    """Main solve loop that processes different modes."""
+    logger = get_logger("solve_worker_main", "worker")
+    
     last_ra = None
     last_dec = None
     last_mode = settings.mode
+    
     while True:
-        logger.info("[DIAG] Top of main loop")
         try:
             settings.reload_if_changed()
             mode = settings.mode.lower()
             error = None
             res = SolveResult(ra_deg=None, dec_deg=None, roll_deg=None, plate_scale_arcsec_px=None, confidence=None)
+            
+            # Check for mode changes
             if mode != last_mode:
                 logger.info(f"Mode changed: {last_mode} -> {mode}")
                 last_mode = mode
+            
+            # Process different modes
             if mode == "test":
-                logger.info("[DIAG] In test mode loop")
                 write_status(mode, res, error)
-                logger.info("[DIAG] End of main loop (test mode)")
                 time.sleep(1.0)
                 continue
+                
             elif mode == "align":
-                logger.info("Align mode: capturing preview frame.")
                 frame = camera.capture()
-                logger.info("[DIAG] Finished camera.capture() in align mode")
                 res = SolveResult(ra_deg=None, dec_deg=None, roll_deg=None, plate_scale_arcsec_px=None, confidence=None)
-            else:
-                logger.info("Solve mode: capturing frame and running solver.")
-                frame = camera.capture()
-                try:
-                    if settings.solver.type == "tetra3":
-                        primary = Tetra3Solver()
-                        fallback = AstrometrySolver()
-                    else:
-                        primary = AstrometrySolver()
-                        fallback = Tetra3Solver()
-                    logger.info("Running primary solver...")
-                    input_data = PREVIEW_PATH
-                    if last_ra is not None and last_dec is not None:
-                        res = primary.solve(input_data, ra_hint=last_ra, dec_hint=last_dec, radius_hint=settings.solver.solve_radius)
-                    else:
-                        res = primary.solve(input_data)
-                    logger.info(f"Primary solver result: confidence={getattr(res, 'confidence', None)}")
-                    conf = res.confidence
-                    try:
-                        conf_val = float(conf)
-                    except (TypeError, ValueError):
-                        conf_val = 1.0
-                    # TODO: fallback logic can be restored here if needed
-                except Exception as e:
-                    error = f"Solver error: {e}"
-                    camera.last_error = error
-                    logger.error(error)
+                conf_val = 0.0
+                
+            else:  # solve mode
+                res, error, conf_val = process_solve_mode(camera, last_ra, last_dec)
+                
+                # Update hints if we have a good solve
                 if res and conf_val > 0.5:
                     last_ra = res.ra_deg
                     last_dec = res.dec_deg
                     logger.info(f"Updated last RA/Dec: RA={last_ra}, Dec={last_dec}")
+            
+            # Update status and publish results
             write_status(mode, res, error or camera.get_last_error())
+            
             if lx200:
                 lx200.publish(res)
+                
             if onstep:
                 try:
                     if settings.onstep_sync_mode == "slew_then_sync":
@@ -292,82 +313,37 @@ def main():
                         onstep.sync_pointing(res)
                 except Exception as e:
                     logger.error(f"OnStep sync error: {e}")
+            
             logger.info("[DIAG] End of main loop")
             time.sleep(0.1)
             logger.info("[DIAG] Slept 0.1s, about to next loop")
+            
         except Exception as loop_exc:
             logger.error(f"[UNHANDLED EXCEPTION in main loop]: {loop_exc}", exc_info=True)
             time.sleep(1.0)
 
-    pass  # Removed for single-threaded mode
+
+def main():
+    """Main entry point - initialize components and start solve loop."""
+    logger = get_logger("solve_worker_main", "worker")
+
+    # Initialize LX200 server
+    logger.info(f"Starting LX200 server on port {settings.lx200_port}")
+    lx200 = LX200Server(port=settings.lx200_port)
+    lx200.start()
+
+    # Initialize OnStep client if enabled
+    onstep = OnStepClient() if settings.onstep.enabled else None
     if onstep:
         logger.info("OnStep client enabled.")
 
     logger.info(f"Mode: {settings.mode}")
 
+    # Initialize camera
     camera = CameraCapture(settings)
-    last_ra = None
-    last_dec = None
-    last_mode = settings.mode
-    while True:
-        settings.reload_if_changed()
-        mode = settings.mode.lower()
-        error = None
-        res = SolveResult(ra_deg=None, dec_deg=None, roll_deg=None, plate_scale_arcsec_px=None, confidence=None)
-        if mode != last_mode:
-            logger.info(f"Mode changed: {last_mode} -> {mode}")
-            last_mode = mode
-        if mode == "test":
-            write_status(mode, res, error)
-            time.sleep(1.5)
-            continue
-        elif mode == "align":
-            logger.info("Align mode: capturing preview frame.")
-            frame = camera.capture()
-            res = SolveResult(ra_deg=None, dec_deg=None, roll_deg=None, plate_scale_arcsec_px=None, confidence=None)
-        else:
-            logger.info("Solve mode: capturing frame and running solver.")
-            frame = camera.capture()
-            try:
-                if settings.solver.type == "tetra3":
-                    primary = Tetra3Solver()
-                    fallback = AstrometrySolver()
-                else:
-                    primary = AstrometrySolver()
-                    fallback = Tetra3Solver()
-                logger.info("Running primary solver...")
-                input_data = PREVIEW_PATH
-                if last_ra is not None and last_dec is not None:
-                    res = primary.solve(input_data, ra_hint=last_ra, dec_hint=last_dec, radius_hint=settings.solver.solve_radius)
-                else:
-                    res = primary.solve(input_data)
-                logger.info(f"Primary solver result: confidence={getattr(res, 'confidence', None)}")
-                conf = res.confidence
-                try:
-                    conf_val = float(conf)
-                except (TypeError, ValueError):
-                    conf_val = 1.0
-                # TODO: fallback logic can be restored here if needed
-            except Exception as e:
-                error = f"Solver error: {e}"
-                camera.last_error = error
-                logger.error(error)
-            if res and conf_val > 0.5:
-                last_ra = res.ra_deg
-                last_dec = res.dec_deg
-                logger.info(f"Updated last RA/Dec: RA={last_ra}, Dec={last_dec}")
-        write_status(mode, res, error or camera.get_last_error())
-        if lx200:
-            lx200.publish(res)
-        if onstep:
-            try:
-                if settings.onstep_sync_mode == "slew_then_sync":
-                    onstep.slew_then_sync(res)
-                else:
-                    onstep.sync_pointing(res)
-            except Exception as e:
-                logger.error(f"OnStep sync error: {e}")
-        time.sleep(1.5)
+    
+    # Start the main solve loop
+    run_solve_loop(camera, lx200, onstep)
 
 if __name__ == "__main__":
     main()

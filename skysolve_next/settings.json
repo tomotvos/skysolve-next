@@ -1,5 +1,5 @@
 {
-  "mode": "solve",
+  "mode": "test",
   "web_port": 5001,
   "lx200_port": 5002,
   "solver": {
@@ -19,7 +19,7 @@
     "enabled": false
   },
   "logging": {
-    "level": "INFO",
+    "level": "DEBUG",
     "structured": false,
     "rotation": {
       "max_file_size_mb": 10,

@@ -67,16 +67,25 @@ class LX200Server:
             t.start()
 
     def _client_loop(self, conn: socket.socket, addr) -> None:
-        conn.settimeout(15)
+        conn.settimeout(30)  # Increased timeout for SkySafari compatibility
         buf = ""
         try:
+            # Send initial acknowledgment - some LX200 clients expect this
+            # conn.sendall(b"#")  # Initial handshake for SkySafari compatibility
+            
             while True:
                 try:
                     chunk = conn.recv(4096)
                 except socket.timeout:
                     # continue to keep connection alive; SkySafari often polls
+                    _logger.debug("Socket timeout for %s:%d, continuing", addr[0], addr[1])
                     continue
+                except Exception as e:
+                    _logger.debug("Socket error for %s:%d: %s", addr[0], addr[1], e)
+                    break
                 if not chunk:
+                    _logger.debug("Client %s:%d sent empty chunk, closing connection", addr[0], addr[1])
+                    _record_debug(f"EMPTY_CHUNK {addr[0]}:{addr[1]}")
                     break
                 # log raw bytes only at debug level
                 hexb = binascii.hexlify(chunk).decode()

@@ -182,14 +182,25 @@ class SkySolveLogger:
         # Set root logger level
         root_logger.setLevel(self._current_level)
         
-        # Add console handler with simple formatting
+        # Determine formatter based on structured setting
+        logging_config = self.config.get('logging', {})
+        use_structured = logging_config.get('structured', False)
+        
+        if use_structured:
+            console_formatter = StructuredFormatter()
+            capture_formatter = StructuredFormatter()
+        else:
+            console_formatter = SimpleFormatter()
+            capture_formatter = SimpleFormatter()
+        
+        # Add console handler with chosen formatting
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setLevel(self._current_level)
-        console_handler.setFormatter(SimpleFormatter())
+        console_handler.setFormatter(console_formatter)
         root_logger.addHandler(console_handler)
         
         # Add capture handler for web interface
-        capture_handler = CaptureHandler(self.capture, SimpleFormatter())
+        capture_handler = CaptureHandler(self.capture, capture_formatter)
         capture_handler.setLevel(logging.DEBUG)
         root_logger.addHandler(capture_handler)
         
@@ -206,7 +217,8 @@ class SkySolveLogger:
             # Get rotation settings from config
             max_bytes, backup_count = self._get_rotation_settings()
             
-            # Add rotating file handler with JSON formatting for structured logs
+            # Add rotating file handler - use structured format for files to enable log parsing
+            # Files always use structured format regardless of console setting for better tooling
             file_handler = logging.handlers.RotatingFileHandler(
                 SHARED_LOG_FILE, 
                 maxBytes=max_bytes,
