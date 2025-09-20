@@ -213,7 +213,6 @@ def write_status(mode, res, error=None):
     pass  # Removed for single-threaded mode
 
 def process_solve_mode(camera, last_ra, last_dec):
-    """Process solve mode: capture frame and run solver."""
     logger = get_logger("solve_worker_main", "worker")
     
     logger.info("Solve mode: capturing frame and running solver.")
@@ -260,7 +259,6 @@ def process_solve_mode(camera, last_ra, last_dec):
 
 
 def run_solve_loop(camera, lx200, onstep):
-    """Main solve loop that processes different modes."""
     logger = get_logger("solve_worker_main", "worker")
     
     last_ra = None
@@ -314,9 +312,7 @@ def run_solve_loop(camera, lx200, onstep):
                 except Exception as e:
                     logger.error(f"OnStep sync error: {e}")
             
-            logger.info("[DIAG] End of main loop")
             time.sleep(0.1)
-            logger.info("[DIAG] Slept 0.1s, about to next loop")
             
         except Exception as loop_exc:
             logger.error(f"[UNHANDLED EXCEPTION in main loop]: {loop_exc}", exc_info=True)
@@ -324,7 +320,6 @@ def run_solve_loop(camera, lx200, onstep):
 
 
 def main():
-    """Main entry point - initialize components and start solve loop."""
     logger = get_logger("solve_worker_main", "worker")
 
     # Initialize LX200 server
