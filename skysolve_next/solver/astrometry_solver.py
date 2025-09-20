@@ -36,7 +36,13 @@ class AstrometrySolver(Solver):
             image_path,
             "--overwrite",
             "--no-plots",
-            "--new-fits", "none"
+            "--new-fits", "none",
+            "--sigma", "5",
+            "--depth", "20",
+			"--uniformize", "0",
+            "--no-remove-lines",
+			"--pnm", "none",
+            "--rdls", "none"
         ]
         if ra_hint is not None and dec_hint is not None:
             cmd += ["--ra", str(ra_hint), "--dec", str(dec_hint), "--radius", str(radius_hint)]
