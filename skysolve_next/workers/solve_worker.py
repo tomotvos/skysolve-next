@@ -26,7 +26,8 @@ except ImportError as e:
 print(f"[DIAG] PICAMERA2_AVAILABLE: {PICAMERA2_AVAILABLE}")
 print(f"[DIAG] sys.platform: {sys.platform}")
 
-PREVIEW_PATH = "skysolve_next/web/solve/last_image.jpg"
+IMAGE_PATH = "skysolve_next/web/solve/last_image.jpg"
+PREVIEW_PATH = "skysolve_next/web/solve/image.jpg"
 STATUS_PATH = "skysolve_next/web/worker_status.json"
 
 class CameraCapture:
@@ -100,16 +101,10 @@ class CameraCapture:
                 self.picam.set_controls(controls)
                 self.logger.debug(f"Set camera controls: {controls}")
                 frame = self.picam.capture_array()
-                self.save_preview(frame)
+                self.save_frame(frame)
                 self.latest_frame = frame
                 self.last_error = None
                 self.logger.info("Image captured successfully.")
-                # Sleep for shutter speed to simulate exposure time
-                try:
-                    self.logger.debug(f"Sleeping for shutter speed: {shutter}s")
-                    time.sleep(max(0.01, shutter))
-                except Exception as sleep_e:
-                    self.logger.warning(f"Could not sleep for shutter: {sleep_e}")
                 return frame
             except Exception as e:
                 self.last_error = f"Camera capture failed: {e}"
@@ -127,7 +122,7 @@ class CameraCapture:
                 # Simulate shutter speed delay
                 shutter = float(getattr(self.settings.camera, "shutter_speed", "1"))
                 time.sleep(max(0.01, shutter))
-                self.save_preview(frame)
+                self.save_frame(frame)
                 self.latest_frame = frame
                 self.logger.info("Demo image loaded successfully.")
             except Exception as e:
@@ -137,34 +132,32 @@ class CameraCapture:
                 self.latest_frame = frame
             return frame
 
-    def save_preview(self, frame):
+    def save_frame(self, frame):
         try:
             import cv2
             import shutil
-            cv2.imwrite(PREVIEW_PATH, frame)
-            self.logger.debug(f"Preview image saved to {PREVIEW_PATH}")
+            cv2.imwrite(IMAGE_PATH, frame)
+            self.logger.debug(f"Preview image saved to {IMAGE_PATH}")
             # Also copy to image.jpg for UI preview
-            IMAGE_PATH = "skysolve_next/web/solve/image.jpg"
             try:
-                shutil.copyfile(PREVIEW_PATH, IMAGE_PATH)
-                self.logger.debug(f"Preview image copied to {IMAGE_PATH}")
+                shutil.copyfile(IMAGE_PATH, PREVIEW_PATH)
+                self.logger.debug(f"Preview image copied to {PREVIEW_PATH}")
             except Exception as copy_e:
-                self.logger.error(f"Failed to copy preview to {IMAGE_PATH}: {copy_e}")
+                self.logger.error(f"Failed to copy preview to {PREVIEW_PATH}: {copy_e}")
         except Exception as e:
             self.last_error = f"Preview save failed: {e}"
             self.logger.error(self.last_error)
             # Fallback: save as raw bytes
             try:
-                with open(PREVIEW_PATH, "wb") as f:
+                with open(IMAGE_PATH, "wb") as f:
                     f.write(frame.tobytes())
-                self.logger.debug(f"Preview image saved as raw bytes to {PREVIEW_PATH}")
+                self.logger.debug(f"Preview image saved as raw bytes to {IMAGE_PATH}")
                 # Also try to copy as raw bytes
-                IMAGE_PATH = "skysolve_next/web/solve/image.jpg"
                 try:
-                    shutil.copyfile(PREVIEW_PATH, IMAGE_PATH)
-                    self.logger.debug(f"Raw preview image copied to {IMAGE_PATH}")
+                    shutil.copyfile(IMAGE_PATH, PREVIEW_PATH)
+                    self.logger.debug(f"Raw preview image copied to {PREVIEW_PATH}")
                 except Exception as copy_e:
-                    self.logger.error(f"Failed to copy raw preview to {IMAGE_PATH}: {copy_e}")
+                    self.logger.error(f"Failed to copy raw preview to {PREVIEW_PATH}: {copy_e}")
             except Exception as e2:
                 self.last_error = f"Preview save failed: {e}; fallback failed: {e2}"
                 self.logger.error(self.last_error)
@@ -218,6 +211,7 @@ def process_solve_mode(camera, last_ra, last_dec):
     logger.info("Solve mode: capturing frame and running solver.")
     frame = camera.capture()
     error = None
+    # initialize solve result
     res = SolveResult(ra_deg=None, dec_deg=None, roll_deg=None, plate_scale_arcsec_px=None, confidence=None)
     
     try:
@@ -230,7 +224,7 @@ def process_solve_mode(camera, last_ra, last_dec):
             fallback = Tetra3Solver()
         
         logger.info("Running primary solver...")
-        input_data = PREVIEW_PATH
+        input_data = IMAGE_PATH
         
         # Use hints if available
         if last_ra is not None and last_dec is not None:

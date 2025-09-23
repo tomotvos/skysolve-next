@@ -48,7 +48,6 @@ async def reload_settings_middleware(request: Request, call_next):
     response = await call_next(request)
     return response
 
-WELL_KNOWN_IMAGE_PATH = "skysolve_next/web/solve/last_image.jpg"
 DEMO_IMAGE_PATH = "skysolve_next/web/static/demo.jpg"
 SOLVE_IMAGE_PATH = "skysolve_next/web/solve/image.jpg"
 SOLVE_DIR = "skysolve_next/web/solve"
