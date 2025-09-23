@@ -1,0 +1,17 @@
+[Unit]
+Description=SkySolve Solve Worker
+After=network.target
+
+[Service]
+User=skysolve
+Group=skysolve
+WorkingDirectory=/opt/skysolve/current
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/skysolve/current/.venv/bin/python -m skysolve_next.workers.solve_worker
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:/opt/skysolve/logs/worker.log
+StandardError=append:/opt/skysolve/logs/worker.log
+
+[Install]
+WantedBy=multi-user.target

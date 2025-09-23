@@ -1,0 +1,17 @@
+[Unit]
+Description=SkySolve Web App
+After=network.target
+
+[Service]
+User=skysolve
+Group=skysolve
+WorkingDirectory=/opt/skysolve/current
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/skysolve/current/.venv/bin/uvicorn skysolve_next.web.app:app --host 0.0.0.0 --port 5001
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:/opt/skysolve/logs/web.log
+StandardError=append:/opt/skysolve/logs/web.log
+
+[Install]
+WantedBy=multi-user.target
