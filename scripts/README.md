@@ -109,11 +109,81 @@ tail -F /opt/skysolve/logs/*.log
 - `skysolve-worker.service` - Solve worker process
 - Both run as `skysolve` user with automatic restart on failure
 
+## Managing Multiple Versions
+
+If you have legacy services installed and want to selectively start/stop versions:
+
+```bash
+# Install new version without auto-start at boot
+sudo NO_AUTO_START=1 ./scripts/deploy_production.sh
+
+# Services are installed but won't start automatically at boot
+# Start manually when needed:
+sudo systemctl start skysolve-web skysolve-worker
+
+# Switch between versions:
+sudo systemctl stop skysolve encodertoSkySafari                 # Stop legacy
+sudo systemctl start skysolve-web skysolve-worker               # Start new
+
+# Enable auto-start later if desired:
+sudo systemctl enable skysolve-web skysolve-worker
+```
+
 ### Options
-- `NO_RESTART=1` - Enable services but don't start them
+- `NO_AUTO_START=1` - Install services but don't enable auto-start at boot
+- `NO_RESTART=1` - Enable services but don't start them now
 - `INSTALL_DIR=/custom/path` - Use custom installation directory  
 - `SERVICE_USER=myuser` - Use custom service user
 - `BRANCH=develop` - Deploy from specific git branch
+
+**Option combinations:**
+- Default: Enable auto-start + start now
+- `NO_RESTART=1`: Enable auto-start but don't start now  
+- `NO_AUTO_START=1`: Start now but don't enable auto-start
+- `NO_AUTO_START=1 NO_RESTART=1`: Install only, don't enable or start
+
+## Service Management
+
+### Toggle Between Service Versions
+
+Use `toggle_services.sh` to switch between legacy and next service versions:
+
+```bash
+# Switch to legacy services (skysolve, encodertoSkySafari)
+./toggle_services.sh legacy
+
+# Switch to next services (skysolve-web, skysolve-worker)  
+./toggle_services.sh next
+# or
+./toggle_services.sh new
+
+# Check status of all services
+./toggle_services.sh status
+
+# Show usage help
+./toggle_services.sh
+```
+
+The script will:
+- Stop the currently running services (if any)
+- Start the requested service set
+- Show the final status of all services
+- Handle missing services gracefully
+
+### Manual Service Management
+
+If you prefer manual control:
+
+```bash
+# Stop everything
+sudo systemctl stop skysolve-web skysolve-worker skysolve encodertoSkySafari
+
+# Start next services
+sudo systemctl start skysolve-web skysolve-worker
+
+# Start legacy services  
+sudo systemctl start skysolve encodertoSkySafari
+```
 
 ## Key Differences
 
@@ -121,3 +191,4 @@ tail -F /opt/skysolve/logs/*.log
 |--------|---------|-------------|------------------|---------|
 | `dev_setup.sh` | Development | Mac/Linux/Pi | No | Regular user |
 | `deploy_production.sh` | Production | Pi only | Yes | Root (sudo) |
+| `toggle_services.sh` | Service switching | Pi only | No | Root (sudo) |

@@ -13,6 +13,7 @@ REPO_URL=${REPO_URL:-}
 BRANCH=${BRANCH:-main}
 WORKDIR=${WORKDIR:-$PWD}
 NO_RESTART=${NO_RESTART:-}
+NO_AUTO_START=${NO_AUTO_START:-}
 
 if [ "$EUID" -ne 0 ]; then
   echo "This script must be run as root (sudo)." >&2
@@ -113,15 +114,26 @@ WantedBy=multi-user.target
 SERVICE
 fi
 
-echo "Reloading systemd and enabling services"
+echo "Reloading systemd and configuring services"
 systemctl daemon-reload
 
-if [ -z "$NO_RESTART" ]; then
+if [ -n "$NO_AUTO_START" ]; then
+  # Install services but don't enable auto-start at boot
+  if [ -z "$NO_RESTART" ]; then
+    # Start services now but don't enable auto-start
+    systemctl start skysolve-web.service skysolve-worker.service
+    echo "✅ Services started (manual start only, no auto-start at boot)"
+  else
+    echo "⚠️  Services installed but not enabled or started (NO_AUTO_START=1, NO_RESTART=1)"
+  fi
+elif [ -z "$NO_RESTART" ]; then
+  # Normal mode: enable auto-start and start now
   systemctl enable --now skysolve-web.service skysolve-worker.service
-  echo "✅ Services enabled and started"
+  echo "✅ Services enabled for auto-start and started"
 else
+  # Enable auto-start but don't start now
   systemctl enable skysolve-web.service skysolve-worker.service
-  echo "⚠️  Services enabled but not started (NO_RESTART=1)"
+  echo "⚠️  Services enabled for auto-start but not started (NO_RESTART=1)"
 fi
 
 echo ""
@@ -132,6 +144,17 @@ echo "View logs:        sudo journalctl -u skysolve-web -f"
 echo "                  sudo journalctl -u skysolve-worker -f"
 echo "Web interface:    http://$(hostname -I | awk '{print $1}'):5001"
 echo "LX200 server:     port 5002"
+echo ""
+if [ -n "$NO_AUTO_START" ]; then
+  echo "Manual service control:"
+  echo "  sudo systemctl start skysolve-web skysolve-worker    # Start services"
+  echo "  sudo systemctl stop skysolve-web skysolve-worker     # Stop services"
+  echo "  sudo systemctl enable skysolve-web skysolve-worker   # Enable auto-start"
+else
+  echo "Service control:"
+  echo "  sudo systemctl restart skysolve-web skysolve-worker  # Restart services"
+  echo "  sudo systemctl disable skysolve-web skysolve-worker  # Disable auto-start"
+fi
 echo ""
 echo "For updates:"
 echo "  cd $INSTALL_DIR/current"
