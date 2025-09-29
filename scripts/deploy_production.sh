@@ -58,16 +58,22 @@ else
 fi
 
 # Install Pi-specific system dependencies if on Raspberry Pi
-if grep -q "Raspberry Pi\|BCM" /proc/cpuinfo 2>/dev/null || [ -f /boot/config.txt ]; then
+if grep -q "Raspberry Pi\|BCM" /proc/cpuinfo 2>/dev/null || [ -f /boot/config.txt ] || [ -f /boot/firmware/config.txt ]; then
   echo "Detected Raspberry Pi - installing camera system dependencies"
   apt update
-  apt install -y python3-libcamera python3-kms++ libcamera-apps libcamera-dev libcamera-tools
-  echo "Pi camera dependencies installed"
+  apt install -y python3-libcamera libcamera-dev libcamera-apps libcamera-tools
+  echo "Pi camera system dependencies installed"
 fi
 
 # Create and populate venv
 echo "Creating virtualenv and installing dependencies"
-sudo -u "$SERVICE_USER" bash -lc "cd '$CURRENT_DIR' && python3 -m venv .venv && . .venv/bin/activate && pip install -U pip setuptools wheel && pip install -e ."
+if grep -q "Raspberry Pi\|BCM" /proc/cpuinfo 2>/dev/null || [ -f /boot/config.txt ] || [ -f /boot/firmware/config.txt ]; then
+  # Pi-specific installation - use system-site-packages for libcamera access
+  sudo -u "$SERVICE_USER" bash -lc "cd '$CURRENT_DIR' && python3 -m venv .venv --system-site-packages && . .venv/bin/activate && pip install -U pip setuptools wheel && pip install -e . && pip install --upgrade picamera2"
+else
+  # Standard installation
+  sudo -u "$SERVICE_USER" bash -lc "cd '$CURRENT_DIR' && python3 -m venv .venv && . .venv/bin/activate && pip install -U pip setuptools wheel && pip install -e ."
+fi
 
 # Create logs directory
 mkdir -p "$INSTALL_DIR/logs"

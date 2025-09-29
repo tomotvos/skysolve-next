@@ -103,6 +103,7 @@ tail -F /opt/skysolve/logs/*.log
 - Production script removes `/opt/skysolve/current` before deployment
 - DO NOT run production script from `/opt/skysolve/current` unless using `REPO_URL`
 - Script includes safety check to prevent copying directory to itself
+- DO NOT delete `/opt/skysolve/logs` directory - services will fail to start without it
 
 ### Systemd Services
 - `skysolve-web.service` - FastAPI web application
