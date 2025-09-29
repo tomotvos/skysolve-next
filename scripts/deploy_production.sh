@@ -57,6 +57,14 @@ else
   chown -R "$SERVICE_USER":"$SERVICE_USER" "$CURRENT_DIR"
 fi
 
+# Install Pi-specific system dependencies if on Raspberry Pi
+if grep -q "Raspberry Pi\|BCM" /proc/cpuinfo 2>/dev/null || [ -f /boot/config.txt ]; then
+  echo "Detected Raspberry Pi - installing camera system dependencies"
+  apt update
+  apt install -y python3-libcamera python3-kms++ libcamera-apps libcamera-dev libcamera-tools
+  echo "Pi camera dependencies installed"
+fi
+
 # Create and populate venv
 echo "Creating virtualenv and installing dependencies"
 sudo -u "$SERVICE_USER" bash -lc "cd '$CURRENT_DIR' && python3 -m venv .venv && . .venv/bin/activate && pip install -U pip setuptools wheel && pip install -e ."
