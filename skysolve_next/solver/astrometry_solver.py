@@ -41,7 +41,8 @@ class AstrometrySolver(Solver):
             "--depth", "20",
 			"--uniformize", "0",
             "--no-remove-lines",
-			"--pnm", "none",
+			"--match", "none",
+			"--corr", "none",
             "--rdls", "none"
         ]
         if ra_hint is not None and dec_hint is not None:
