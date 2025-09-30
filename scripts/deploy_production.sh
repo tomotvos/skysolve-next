@@ -40,6 +40,13 @@ if ! id -u "$SERVICE_USER" >/dev/null 2>&1; then
   echo "Created user $SERVICE_USER"
 fi
 
+# Add service user to required groups for Pi camera access
+if grep -q "Raspberry Pi\|BCM" /proc/cpuinfo 2>/dev/null || [ -f /boot/config.txt ] || [ -f /boot/firmware/config.txt ]; then
+  echo "Adding $SERVICE_USER to camera groups for Pi hardware access"
+  usermod -a -G video,render,gpio "$SERVICE_USER" 2>/dev/null || true
+  echo "User $SERVICE_USER added to video, render, gpio groups"
+fi
+
 # Prepare directories
 mkdir -p "$INSTALL_DIR"
 chown "$SERVICE_USER":"$SERVICE_USER" "$INSTALL_DIR"
@@ -97,6 +104,7 @@ User=${SERVICE_USER}
 Group=${SERVICE_USER}
 WorkingDirectory=${INSTALL_DIR}/current
 Environment=PYTHONUNBUFFERED=1
+Environment=SKYSOLVE_ROOT=${INSTALL_DIR}/current
 ExecStart=${INSTALL_DIR}/current/.venv/bin/uvicorn skysolve_next.web.app:app --host 0.0.0.0 --port 5001
 Restart=on-failure
 RestartSec=5
@@ -117,6 +125,7 @@ User=${SERVICE_USER}
 Group=${SERVICE_USER}
 WorkingDirectory=${INSTALL_DIR}/current
 Environment=PYTHONUNBUFFERED=1
+Environment=SKYSOLVE_ROOT=${INSTALL_DIR}/current
 ExecStart=${INSTALL_DIR}/current/.venv/bin/python -m skysolve_next.workers.solve_worker
 Restart=on-failure
 RestartSec=5
@@ -172,7 +181,7 @@ fi
 echo ""
 echo "For updates:"
 echo "  cd $INSTALL_DIR/current"
-echo "  sudo -u $SERVICE_USER git pull"
+echo "  sudo -u $SERVICE_USER git pull                          # Use skysolve user to avoid git ownership issues"
 echo "  sudo -u $SERVICE_USER .venv/bin/pip install -e ."
 echo "  sudo systemctl restart skysolve-web skysolve-worker"
 

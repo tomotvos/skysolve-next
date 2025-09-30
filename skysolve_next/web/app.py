@@ -257,19 +257,27 @@ def worker_status():
     status_path = "skysolve_next/web/worker_status.json"
     if not os.path.exists(status_path):
         return {"error": "No worker status available"}
-    with open(status_path, "r") as f:
-        status = json.load(f)
-    # If worker is not running, set error even if file exists but is stale
-    import psutil
-    worker_running = any(
-        any(
-            'solve_worker.py' in arg or 'skysolve_next/workers/solve_worker.py' in arg
-            for arg in (p.info.get('cmdline') or [])
-        )
-        for p in psutil.process_iter(['cmdline'])
-    )
-    if not worker_running:
-        status['error'] = 'No worker status available'
+    
+    try:
+        with open(status_path, "r") as f:
+            status = json.load(f)
+    except (json.JSONDecodeError, IOError) as e:
+        return {"error": f"Cannot read worker status: {e}"}
+    
+    # Check if status file is recent (updated within last 30 seconds)
+    # This is more reliable than process detection for systemd services
+    try:
+        import time
+        file_mtime = os.path.getmtime(status_path)
+        current_time = time.time()
+        file_age = current_time - file_mtime
+        
+        if file_age > 30:  # File is stale (older than 30 seconds)
+            status['error'] = 'Worker status file is stale - worker may not be running'
+        
+    except OSError:
+        status['error'] = 'Cannot check worker status file timestamp'
+    
     return status
 
 @app.get("/status")

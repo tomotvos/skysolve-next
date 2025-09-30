@@ -61,7 +61,7 @@ sudo REPO_URL=https://github.com/youruser/skysolve-next.git ./scripts/deploy_pro
 
 **Method 2: Manual update (faster)**
 ```bash
-# Pull latest code
+# Pull latest code (use skysolve user to avoid git ownership issues)
 cd /opt/skysolve/current
 sudo -u skysolve git pull
 
@@ -71,6 +71,8 @@ sudo -u skysolve .venv/bin/pip install -e .
 # Restart services
 sudo systemctl restart skysolve-web skysolve-worker
 ```
+
+**Note:** Always use `sudo -u skysolve` for git operations to avoid "dubious ownership" errors. The `/opt/skysolve/current` directory is owned by the `skysolve` user.
 
 **Method 3: Local code update**
 ```bash
