@@ -45,7 +45,8 @@ class CameraCapture:
                 self.picam = Picamera2()
                 cam_settings = self.settings.camera
                 size = tuple(map(int, cam_settings.image_size.split("x")))
-                config = self.picam.create_still_configuration(main={"size": size, "format": "RGB888"}, buffer_count=2)
+                # config = self.picam.create_still_configuration(main={"size": size, "format": "RGB888"}, buffer_count=2)
+                config = self.picam.create_still_configuration(main={"size": size, "format": "RGB888"})
                 self.picam.configure(config)
                 self.picam.set_controls({
                     "ExposureTime": int(float(cam_settings.shutter_speed) * 1e6),
