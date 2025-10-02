@@ -124,18 +124,25 @@ def solve(request: Request):
         ra_deg = result.ra_deg
         dec_deg = result.dec_deg
         confidence = result.confidence
-        returncode = 0
         stderr = None
+        
+        # Check if solve was actually successful (valid coordinates)
+        solve_successful = (ra_deg is not None and dec_deg is not None and 
+                          ra_deg != 0.0 and dec_deg != 0.0)
+        
     except Exception as e:
         ra_deg = dec_deg = confidence = None
-        returncode = 1
         stderr = str(e)
+        solve_successful = False
+        
     elapsed = time.time() - start_time
     mode = STATUS.get("mode", "solve")
-    error = stderr if returncode is None or returncode != 0 else None
+    error = stderr if not solve_successful else None
     write_status(mode, ra_deg, dec_deg, confidence, error)
-    if returncode is None or returncode != 0:
-        return {"result": "error", "message": stderr, "log": log_lines}
+    
+    if not solve_successful:
+        error_msg = stderr if stderr else "Solve failed - no valid coordinates found"
+        return {"result": "error", "message": error_msg, "log": log_lines}
     # Save last solve info
     LAST_SOLVE["ra"] = ra_deg
     LAST_SOLVE["dec"] = dec_deg

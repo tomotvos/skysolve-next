@@ -4,11 +4,11 @@ from skysolve_next.workers.solve_worker import CameraCapture
 from skysolve_next.core.config import settings
 
 class DummySettings:
-    camera = {
-        "shutter_speed": "1",
+    camera = type('Camera', (), {
+        "shutter_speed": "0.01",  # Very fast for testing
         "iso_speed": "1000",
         "image_size": "1280x960"
-    }
+    })()
 
 @pytest.fixture
 def camera():
@@ -25,10 +25,10 @@ def test_mock_capture(camera):
     assert camera.get_last_error() is None or isinstance(camera.get_last_error(), str)
 
 def test_error_handling(monkeypatch, camera):
-    # Simulate error in save_preview
-    def fail_save_preview(frame):
+    # Simulate error in save_frame
+    def fail_save_frame(frame):
         raise Exception("Save failed")
-    camera.save_preview = fail_save_preview
+    camera.save_frame = fail_save_frame
     frame = camera.capture()
     assert isinstance(frame, np.ndarray)
     # Should still update latest_frame
